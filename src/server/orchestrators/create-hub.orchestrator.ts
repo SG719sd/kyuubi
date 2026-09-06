@@ -23,7 +23,6 @@ export class CreateHubOrchestrator {
       email: dto.email,
       telefono: dto.telefono || null,
       style: dto.style || dto.type || "default",
-      type: dto.style || dto.type || "default",
       categoria: dto.categoria || "default",
       palette: dto.palette || "emerald",
       has_products: dto.has_products ?? false,

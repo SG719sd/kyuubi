@@ -10,17 +10,17 @@ export const dynamic = 'force-dynamic';
 export default async function PiattiPage({
   params,
 }: {
-  params: Promise<{ hubSlug: string }>;
+  params: Promise<{ slugHub: string }>;
 }) {
-  const { hubSlug } = await params;
-  const ctx = await getHubContext(hubSlug);
+  const { slugHub } = await params;
+  const ctx = await getHubContext(slugHub);
 
   if (!ctx) notFound();
 
   const piatti = await PiattiService.listPiatti(ctx.hubId);
 
   return (
-    <HubPageWrapper slugHub={hubSlug}>
+    <HubPageWrapper slugHub={slugHub}>
       {/* Hero Principale integrata nel Server Component */}
       <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl border border-indigo-500/20 mb-6">
         
@@ -53,7 +53,7 @@ export default async function PiattiPage({
       <PiattiView
         piatti={piatti}
         hubId={ctx.hubId}
-        hubSlug={hubSlug}
+        hubSlug={slugHub}
         isAdmin={ctx.isAdmin}
       />
     </HubPageWrapper>

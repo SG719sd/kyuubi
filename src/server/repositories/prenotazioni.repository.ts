@@ -44,7 +44,7 @@ export class PrenotazioniRepository {
       .select(`
         *,
         items:prenotazioni_items(*),
-        professionisti(id, nome, ruolo, immagine),
+        professionisti(id, nome, ruolo, img_url),
         rubrica(id, nome, cognome, telefono, email)
       `)
       .eq('id_hub', hubId)

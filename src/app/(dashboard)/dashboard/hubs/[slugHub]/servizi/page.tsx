@@ -10,17 +10,17 @@ export const dynamic = 'force-dynamic';
 export default async function ServiziPage({
   params,
 }: {
-  params: Promise<{ hubSlug: string }>;
+  params: Promise<{ slugHub: string }>; // 1. Cambiato da hubSlug a slugHub
 }) {
-  const { hubSlug } = await params;
-  const ctx = await getHubContext(hubSlug);
+  const { slugHub } = await params; // 2. Estrai slugHub
+  const ctx = await getHubContext(slugHub); // 3. Passa slugHub a getHubContext
 
   if (!ctx) notFound();
 
   const servizi = await ServiziService.listServizi(ctx.hubId);
 
   return (
-    <HubPageWrapper slugHub={hubSlug}>
+    <HubPageWrapper slugHub={slugHub}>
       {/* Hero Principale integrata nel Server Component */}
       <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl border border-indigo-500/20 mb-6">
         
@@ -53,7 +53,7 @@ export default async function ServiziPage({
       <ServiziView
         servizi={servizi}
         hubId={ctx.hubId}
-        hubSlug={hubSlug}
+        hubSlug={slugHub}
         isAdmin={ctx.isAdmin}
       />
     </HubPageWrapper>

@@ -34,7 +34,6 @@ export class HubInfoService {
       has_services: validated.has_services,
       has_booking: validated.has_booking,
       style: styleVal,
-      type: styleVal,
       palette: validated.palette,
     });
   }
