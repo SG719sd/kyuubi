@@ -2,6 +2,10 @@ import { ProfessionistiServiziRepository } from '@/server/repositories/professio
 import { professionistaServizioSchema, ProfessionistaServizioInput } from '@/lib/validations/professionisti-servizi';
 
 export class ProfessionistiServiziService {
+  static async listByHub(hubId: string) {
+    return await ProfessionistiServiziRepository.getByHubId(hubId);
+  }
+
   static async listByProfessionista(hubId: string, idProfessionista: number) {
     return await ProfessionistiServiziRepository.getByProfId(hubId, idProfessionista);
   }

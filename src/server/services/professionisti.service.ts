@@ -1,5 +1,6 @@
 import { ProfessionistiRepository } from '@/server/repositories/professionisti.repository';
 import { professionistaSchema, ProfessionistaInput } from '@/lib/validations/professionisti';
+import { StorageService } from '@/server/services/storage.service';
 
 export class ProfessionistiService {
   static async listProfessionisti(hubId: string) {
@@ -18,10 +19,19 @@ export class ProfessionistiService {
     return await ProfessionistiRepository.update(id, cleanedInput);
   }
 
-    static async updateImmagineProfessionista(id: number, url: string) {
-      return await ProfessionistiRepository.updateImmagine(id, url);
+  static async updateImmagineProfessionista(id: number, url: string) {
+    const existing = await ProfessionistiRepository.getById(id);
+    if (existing?.img_url && existing.img_url !== url) {
+      await StorageService.deleteFile(existing.img_url);
     }
+    return await ProfessionistiRepository.updateImmagine(id, url);
+  }
+
   static async deleteProfessionista(id: number) {
+    const existing = await ProfessionistiRepository.getById(id);
+    if (existing?.img_url) {
+      await StorageService.deleteFile(existing.img_url);
+    }
     return await ProfessionistiRepository.softDelete(id);
   }
 }

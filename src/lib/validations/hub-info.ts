@@ -29,8 +29,10 @@ export const updateHubStyleSettingsSchema = z.object({
   has_products: z.boolean().default(false),
   has_dishes: z.boolean().default(false),
   has_services: z.boolean().default(false),
-  type: z.string().min(1, 'Seleziona un tipo').default('default'),
-  palette: z.string().min(1, 'Seleziona una palette').default('default'),
+  has_booking: z.boolean().default(true),
+  style: z.string().min(1, 'Seleziona uno stile').default('default'),
+  type: z.string().optional(),
+  palette: z.string().min(1, 'Seleziona una palette').default('emerald'),
 });
 
 export type UpdateHubGeneralInput = z.infer<typeof updateHubGeneralSchema>;

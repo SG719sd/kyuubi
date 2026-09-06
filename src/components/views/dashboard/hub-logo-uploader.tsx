@@ -7,6 +7,8 @@ import { compressAndConvertToWebP } from '@/lib/image-optimizer';
 import { getHubStoragePath } from '@/types/storage-paths';
 import { Store, Camera, Trash2, Loader2 } from 'lucide-react';
 
+import { updateHubLogoAction } from '@/server/actions/hub-info.actions';
+
 interface HubLogoUploaderProps {
   hubId: string;
   slugHub: string;
@@ -72,14 +74,11 @@ export function HubLogoUploader({
       const basePublicUrl = publicUrlData.publicUrl;
       const displayUrl = `${basePublicUrl}?t=${Date.now()}`;
 
-      // Aggiorna DB (eseguiamo il cast su .from() per prevenire l'errore TS2345 / 'never')
+      // Aggiorna DB tramite Server Action
       if (logoUrl !== basePublicUrl) {
-        const { error: dbError } = await (supabase.from('hubs') as any)
-          .update({ logo_url: basePublicUrl })
-          .eq('id', hubId);
-
-        if (dbError) {
-          throw new Error(`Database error: ${dbError.message}`);
+        const updateRes = await updateHubLogoAction(slugHub, basePublicUrl);
+        if (!updateRes.success) {
+          throw new Error(updateRes.error || 'Errore salvataggio logo');
         }
       }
 
@@ -121,12 +120,9 @@ export function HubLogoUploader({
         console.warn('File non trovato o già rimosso nello storage:', storageError.message);
       }
 
-      const { error: dbError } = await (supabase.from('hubs') as any)
-        .update({ logo_url: null })
-        .eq('id', hubId);
-
-      if (dbError) {
-        throw new Error(`Database error: ${dbError.message}`);
+      const updateRes = await updateHubLogoAction(slugHub, null);
+      if (!updateRes.success) {
+        throw new Error(updateRes.error || 'Errore rimozione logo');
       }
 
       setLogoUrl(null);

@@ -45,6 +45,7 @@ export default function ServizioDrawer({
     tempo_minuti: 30,
     richiede_operatore: false,
     pubblico: true,
+    prenotabile: true,
     is_active: true,
     note: "",
     preferito: false,
@@ -65,6 +66,7 @@ export default function ServizioDrawer({
         tempo_minuti: initialData.tempo_minuti ?? 30,
         richiede_operatore: Boolean(initialData.richiede_operatore),
         pubblico: Boolean(initialData.pubblico),
+        prenotabile: initialData.prenotabile !== undefined ? Boolean(initialData.prenotabile) : true,
         is_active: Boolean(initialData.is_active),
         note: initialData.note || "",
         preferito: Boolean(initialData.preferito),
@@ -84,6 +86,7 @@ export default function ServizioDrawer({
         tempo_minuti: 30,
         richiede_operatore: false,
         pubblico: true,
+        prenotabile: true,
         is_active: true,
         note: "",
         preferito: false,
@@ -465,6 +468,19 @@ export default function ServizioDrawer({
                   checked={form.pubblico}
                   onChange={(e) =>
                     setForm({ ...form, pubblico: e.target.checked })
+                  }
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                />
+              </label>
+              <label className="flex justify-between items-center cursor-pointer select-none">
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  Prenotabile in Agenda
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.prenotabile}
+                  onChange={(e) =>
+                    setForm({ ...form, prenotabile: e.target.checked })
                   }
                   className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
                 />

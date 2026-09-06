@@ -52,6 +52,8 @@ export default function ProdottoDrawer({
     quantita_alert: 10,
     posizione_magazzino: "",
     tempo_minuti: 0,
+    pubblico: true,
+    prenotabile: false,
     is_active: true,
     note: "",
     preferito: false,
@@ -79,6 +81,8 @@ export default function ProdottoDrawer({
         quantita_alert: initialData.quantita_alert ?? 10,
         posizione_magazzino: initialData.posizione_magazzino || "",
         tempo_minuti: initialData.tempo_minuti ?? 0,
+        pubblico: initialData.pubblico !== undefined ? Boolean(initialData.pubblico) : true,
+        prenotabile: initialData.prenotabile !== undefined ? Boolean(initialData.prenotabile) : false,
         is_active: Boolean(initialData.is_active),
         note: initialData.note || "",
         preferito: Boolean(initialData.preferito),
@@ -105,6 +109,8 @@ export default function ProdottoDrawer({
         quantita_alert: 10,
         posizione_magazzino: "",
         tempo_minuti: 0,
+        pubblico: true,
+        prenotabile: false,
         is_active: true,
         note: "",
         preferito: false,
@@ -576,6 +582,32 @@ export default function ProdottoDrawer({
                   checked={form.is_active}
                   onChange={(e) =>
                     setForm({ ...form, is_active: e.target.checked })
+                  }
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                />
+              </label>
+              <label className="flex justify-between items-center cursor-pointer select-none">
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Prodotto Pubblico
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.pubblico}
+                  onChange={(e) =>
+                    setForm({ ...form, pubblico: e.target.checked })
+                  }
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                />
+              </label>
+              <label className="flex justify-between items-center cursor-pointer select-none">
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Prenotabile in Agenda / Ordini
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.prenotabile}
+                  onChange={(e) =>
+                    setForm({ ...form, prenotabile: e.target.checked })
                   }
                   className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
                 />

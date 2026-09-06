@@ -66,7 +66,7 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
       color: "text-indigo-600 dark:text-indigo-400",
       bg: "bg-indigo-500/10",
       borderHover: "hover:border-indigo-500/50",
-      disabled: false,
+      disabled: hub.has_services === false,
     },
     {
       title: "Prenotazioni",
@@ -77,7 +77,7 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-500/10",
       borderHover: "hover:border-emerald-500/50",
-      disabled: true,
+      disabled: hub.has_booking === false,
     },
     {
       title: "Prodotti",
@@ -88,7 +88,7 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-500/10",
       borderHover: "hover:border-amber-500/50",
-      disabled: false,
+      disabled: hub.has_products === false,
     },
     {
       title: "Menu & Piatti",
@@ -99,7 +99,7 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
       color: "text-rose-600 dark:text-rose-400",
       bg: "bg-rose-500/10",
       borderHover: "hover:border-rose-500/50",
-      disabled: false,
+      disabled: hub.has_dishes === false,
     },
     {
       title: "Rubrica Clienti",

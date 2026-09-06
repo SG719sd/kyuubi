@@ -24,6 +24,7 @@ import {
   ShoppingBag,
   Utensils,
   Wrench,
+  CalendarCheck,
   LayoutGrid,
 } from "lucide-react";
 import { PALETTE_OPTIONS, TYPE_OPTIONS } from "@/utils/constants/dropdown";
@@ -82,8 +83,10 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
     has_products: Boolean(initialData.hub.has_products),
     has_dishes: Boolean(initialData.hub.has_dishes),
     has_services: Boolean(initialData.hub.has_services),
-    type: initialData.hub.type || "default",
-    palette: initialData.hub.palette || "default",
+    has_booking: Boolean(initialData.hub.has_booking ?? true),
+    style: initialData.hub.style || initialData.hub.type || "default",
+    type: initialData.hub.style || initialData.hub.type || "default",
+    palette: initialData.hub.palette || "emerald",
   });
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
@@ -142,7 +145,10 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
     setLoading(true);
     setMessage(null);
 
-    const res = await updateHubStyleSettingsAction(slugHub, styleSettings);
+    const res = await updateHubStyleSettingsAction(slugHub, {
+      ...styleSettings,
+      style: styleSettings.type,
+    });
 
     if (res.success) {
       setMessage({
@@ -602,7 +608,7 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
                 dell'Hub
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Switch Products */}
                 <label
                   className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
@@ -697,7 +703,40 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Abilita l'elenco dei servizi prenotabili o offerti.
+                      Abilita l'elenco dei servizi offerti.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Switch Booking */}
+                <label
+                  className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                    styleSettings.has_booking
+                      ? "bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
+                      : "bg-slate-50/50 dark:bg-slate-950/40 border-slate-200/80 dark:border-slate-800"
+                  }`}
+                >
+                  <input
+                    disabled={!isAdmin}
+                    type="checkbox"
+                    checked={styleSettings.has_booking}
+                    onChange={(e) =>
+                      setStyleSettings({
+                        ...styleSettings,
+                        has_booking: e.target.checked,
+                      })
+                    }
+                    className="mt-1 h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <CalendarCheck className="w-4 h-4 text-blue-500" />
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        Prenotazioni
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Abilita l'agenda e le prenotazioni online.
                     </p>
                   </div>
                 </label>

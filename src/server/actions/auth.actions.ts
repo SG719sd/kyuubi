@@ -41,7 +41,7 @@ export async function registerAction(formData: FormData): Promise<ActionResponse
     : (realIp || '127.0.0.1');
 
   try {
-    await AuthOrchestrator.register({
+    const result = await AuthOrchestrator.register({
       email,
       password,
       nome,
@@ -50,6 +50,14 @@ export async function registerAction(formData: FormData): Promise<ActionResponse
       marketingAccettato,
       ipAddress,
     });
+
+    // Se Supabase richiede conferma dell'email, session sarà null
+    if (!result.session) {
+      return {
+        success: true,
+        message: 'Registrazione effettuata con successo! Abbiamo inviato un\'email di conferma: verifica la tua casella di posta per attivare l\'account prima di accedere.',
+      };
+    }
   } catch (err: any) {
     return { success: false, error: err.message };
   }

@@ -15,6 +15,8 @@ export const piattoSchema = z.object({
   is_vegano: z.boolean().default(false),
   is_gluten_free: z.boolean().default(false),
   is_disponibile: z.boolean().default(true),
+  pubblico: z.boolean().default(true),
+  prenotabile: z.boolean().default(false),
   is_active: z.boolean().default(true),
   note: z.string().max(500).nullable().optional(),
   preferito: z.boolean().default(false),

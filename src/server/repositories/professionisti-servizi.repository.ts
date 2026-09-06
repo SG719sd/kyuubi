@@ -3,6 +3,21 @@ import { ProfessionistaServizioInput } from '@/lib/validations/professionisti-se
 
 export class ProfessionistiServiziRepository {
   /**
+   * Recupera tutte le associazioni personalizzate per un intero Hub
+   */
+  static async getByHubId(hubId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('professionisti_servizi')
+      .select('*')
+      .eq('id_hub', hubId);
+
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  /**
    * Recupera tutte le associazioni personalizzate per un dato Hub e Professionista
    */
   static async getByProfId(hubId: string, idProfessionista: number) {

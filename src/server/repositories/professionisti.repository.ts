@@ -15,6 +15,18 @@ export class ProfessionistiRepository {
     return data;
   }
 
+  static async getById(id: number) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('professionisti')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return data;
+  }
+
 static async updateImmagine(id: number, immagineUrl: string) {
     const supabase = await createClient();
     const { data, error } = await supabase

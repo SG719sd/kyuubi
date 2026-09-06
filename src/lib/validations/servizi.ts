@@ -14,6 +14,7 @@ export const servizioSchema = z.object({
   tempo_minuti: z.number().int().min(0).default(30),
   richiede_operatore: z.boolean().default(false),
   pubblico: z.boolean().default(true),
+  prenotabile: z.boolean().default(false),
   is_active: z.boolean().default(true),
   note: z.string().max(500).nullable().optional(),
   preferito: z.boolean().default(false),

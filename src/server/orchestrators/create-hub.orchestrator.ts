@@ -22,12 +22,14 @@ export class CreateHubOrchestrator {
       slug: dto.slug,
       email: dto.email,
       telefono: dto.telefono || null,
-      type: dto.type || "default",
+      style: dto.style || dto.type || "default",
+      type: dto.style || dto.type || "default",
       categoria: dto.categoria || "default",
-      palette: dto.palette || "default", // NEW
-      has_products: dto.has_products ?? false, // NEW
-      has_dishes: dto.has_dishes ?? false, // NEW
-      has_services: dto.has_services ?? false, // NEW
+      palette: dto.palette || "emerald",
+      has_products: dto.has_products ?? false,
+      has_dishes: dto.has_dishes ?? false,
+      has_services: dto.has_services ?? false,
+      has_booking: dto.has_booking ?? true,
       indirizzo: dto.indirizzo || null,
       citta: dto.citta || null,
       cap: dto.cap || null,

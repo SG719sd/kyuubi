@@ -146,10 +146,16 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data,
+    } = await supabase.auth.getUser();
+    user = data?.user ?? null;
+  } catch (err) {
+    console.warn('[RootLayout] User session lookup failed:', err);
+  }
 
   return (
     <html lang="it" suppressHydrationWarning>

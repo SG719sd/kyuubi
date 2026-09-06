@@ -16,6 +16,35 @@ export class PiattiRepository {
     return data;
   }
 
+  static async getById(id: number) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('piatti')
+      .select('*')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  static async getPrenotabiliByHubId(hubId: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('piatti')
+      .select('*')
+      .eq('id_hub', hubId)
+      .eq('is_active', true)
+      .eq('prenotabile', true)
+      .is('deleted_at', null)
+      .order('ordine', { ascending: true })
+      .order('titolo', { ascending: true });
+
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
   static async create(payload: PiattoInput) {
     const supabase = await createClient();
     const { data, error } = await supabase

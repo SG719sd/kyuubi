@@ -21,6 +21,8 @@ export const prodottoSchema = z.object({
   quantita_alert: z.number().int().min(0).default(10),
   posizione_magazzino: z.string().max(100).nullable().optional(),
   tempo_minuti: z.number().int().min(0).default(0),
+  pubblico: z.boolean().default(true),
+  prenotabile: z.boolean().default(false),
   is_active: z.boolean().default(true),
   note: z.string().max(500).nullable().optional(),
   preferito: z.boolean().default(false),

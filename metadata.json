@@ -1,0 +1,6 @@
+{
+  "name": "Kyuubi",
+  "description": "Ecosistema modulare per soluzioni gestionali su misura: automazione processi, magazzino QR Code, agenda prenotazioni e catalogo integrato per Hub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

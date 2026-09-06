@@ -19,12 +19,14 @@ export interface Hub {
   id_user: string;
   slug: string;
   nome: string;
-  type: string;
-  palette?: string | null; // NEW
+  style: string;
+  type?: string;
+  palette?: string | null;
   categoria: string;
-  has_products: boolean;  // NEW
-  has_dishes: boolean;    // NEW
-  has_services: boolean;  // NEW
+  has_products: boolean;
+  has_dishes: boolean;
+  has_services: boolean;
+  has_booking?: boolean | null;
   email: string;
   telefono?: string | null;
   indirizzo?: string | null;
@@ -52,11 +54,13 @@ export interface CreateHubWizardDTO {
   email: string;
   telefono?: string;
   categoria?: string;
+  style?: string;
   type?: string;
-  palette?: string;       // NEW
-  has_products?: boolean; // NEW
-  has_dishes?: boolean;   // NEW
-  has_services?: boolean; // NEW
+  palette?: string;
+  has_products?: boolean;
+  has_dishes?: boolean;
+  has_services?: boolean;
+  has_booking?: boolean;
   logo_url?: string;
   indirizzo?: string;
   citta?: string;
@@ -114,6 +118,12 @@ export interface HubWithProfessionista {
 export type UserRow = Tables<'users'>;
 export type HubRow = Hub;
 export type ProfessionistaRow = Professionista;
+export type ServizioRow = Tables<'servizi'>;
+export type ProdottoRow = Tables<'prodotti'>;
+export type PiattoRow = Tables<'piatti'>;
+export type PrenotazioneRow = Tables<'prenotazioni'>;
+export type PrenotazioneItemRow = Tables<'prenotazioni_items'>;
+export type RubricaRow = Tables<'rubrica'>;
 
 // Risposta generica per le Server Actions
 export type ActionResponse<T = null> = {

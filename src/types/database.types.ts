@@ -161,6 +161,7 @@ export type Database = {
           deleted_at: string | null
           descrizione: string | null
           email: string
+          has_booking: boolean | null
           has_dishes: boolean | null
           has_products: boolean | null
           has_services: boolean | null
@@ -178,6 +179,7 @@ export type Database = {
           provincia: string | null
           sito_web: string | null
           slug: string
+          style: string
           telefono: string | null
           type: string
           updated_at: string
@@ -191,6 +193,7 @@ export type Database = {
           deleted_at?: string | null
           descrizione?: string | null
           email: string
+          has_booking?: boolean | null
           has_dishes?: boolean | null
           has_products?: boolean | null
           has_services?: boolean | null
@@ -208,6 +211,7 @@ export type Database = {
           provincia?: string | null
           sito_web?: string | null
           slug: string
+          style?: string
           telefono?: string | null
           type?: string
           updated_at?: string
@@ -221,6 +225,7 @@ export type Database = {
           deleted_at?: string | null
           descrizione?: string | null
           email?: string
+          has_booking?: boolean | null
           has_dishes?: boolean | null
           has_products?: boolean | null
           has_services?: boolean | null
@@ -238,6 +243,7 @@ export type Database = {
           provincia?: string | null
           sito_web?: string | null
           slug?: string
+          style?: string
           telefono?: string | null
           type?: string
           updated_at?: string
@@ -423,6 +429,7 @@ export type Database = {
           note: string | null
           ordine: number
           preferito: boolean
+          prenotabile: boolean | null
           prezzo: number
           pubblico: boolean | null
           titolo: string
@@ -447,6 +454,7 @@ export type Database = {
           note?: string | null
           ordine?: number
           preferito?: boolean
+          prenotabile?: boolean | null
           prezzo?: number
           pubblico?: boolean | null
           titolo: string
@@ -471,6 +479,7 @@ export type Database = {
           note?: string | null
           ordine?: number
           preferito?: boolean
+          prenotabile?: boolean | null
           prezzo?: number
           pubblico?: boolean | null
           titolo?: string
@@ -683,6 +692,7 @@ export type Database = {
           ordine: number
           posizione_magazzino: string | null
           preferito: boolean
+          prenotabile: boolean | null
           prezzo_fornitore: number
           prezzo_listino: number
           prezzo_nuovo: number
@@ -713,6 +723,7 @@ export type Database = {
           ordine?: number
           posizione_magazzino?: string | null
           preferito?: boolean
+          prenotabile?: boolean | null
           prezzo_fornitore?: number
           prezzo_listino?: number
           prezzo_nuovo?: number
@@ -743,6 +754,7 @@ export type Database = {
           ordine?: number
           posizione_magazzino?: string | null
           preferito?: boolean
+          prenotabile?: boolean | null
           prezzo_fornitore?: number
           prezzo_listino?: number
           prezzo_nuovo?: number
@@ -964,6 +976,7 @@ export type Database = {
           note: string | null
           ordine: number
           preferito: boolean
+          prenotabile: boolean | null
           prezzo: number
           prezzo_costo: number
           pubblico: boolean | null
@@ -986,6 +999,7 @@ export type Database = {
           note?: string | null
           ordine?: number
           preferito?: boolean
+          prenotabile?: boolean | null
           prezzo?: number
           prezzo_costo?: number
           pubblico?: boolean | null
@@ -1008,6 +1022,7 @@ export type Database = {
           note?: string | null
           ordine?: number
           preferito?: boolean
+          prenotabile?: boolean | null
           prezzo?: number
           prezzo_costo?: number
           pubblico?: boolean | null

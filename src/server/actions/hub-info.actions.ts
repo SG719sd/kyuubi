@@ -17,29 +17,25 @@ export async function updateHubStyleSettingsAction(
   slugHub: string,
   data: UpdateHubStyleSettingsInput
 ) {
-  const parsed = updateHubStyleSettingsSchema.safeParse(data);
-  if (!parsed.success) {
-    return { success: false, error: 'Dati non validi.' };
+  try {
+    const ctx = await requireHubAdmin(slugHub);
+    await HubInfoService.updateStyleSettings(ctx.hubId, data);
+    revalidatePath(`/dashboard/hubs/${slugHub}`);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Errore durante l\'aggiornamento delle impostazioni' };
   }
+}
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from('hubs')
-    .update({
-      has_products: parsed.data.has_products,
-      has_dishes: parsed.data.has_dishes,
-      has_services: parsed.data.has_services,
-      type: parsed.data.type,
-      palette: parsed.data.palette,
-    })
-    .eq('slug', slugHub);
-
-  if (error) {
-    return { success: false, error: error.message };
+export async function updateHubLogoAction(slugHub: string, logoUrl: string | null) {
+  try {
+    const ctx = await requireHubAdmin(slugHub);
+    await HubInfoService.updateLogo(ctx.hubId, logoUrl);
+    revalidatePath(`/dashboard/hubs/${slugHub}`);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Errore durante l\'aggiornamento del logo' };
   }
-
-  return { success: true };
 }
 
 export async function updateHubGeneralAction(slugHub: string, formData: UpdateHubGeneralInput) {

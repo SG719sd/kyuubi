@@ -1,14 +1,13 @@
 import React from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
 import { UserService } from '@/server/services/user.service';
 import { HubService } from '@/server/services/hub.service';
-import { logoutAction } from '@/server/actions/auth.actions';
 import {
   Store,
   Plus,
   ChevronRight,
-  LogOut,
   Sparkles,
   TrendingUp,
   Building2
@@ -19,7 +18,7 @@ export default async function DashboardPage() {
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
   if (!authUser) {
-    return null;
+    redirect('/login');
   }
 
   // Chiamate parallele per Profilo Utente e Lista degli Hubs

@@ -2,7 +2,7 @@ import { createClient } from '@/utils/supabase/server';
 import { UserService } from '../services/user.service';
 import { ConsensiService } from '../services/consensi.service';
 import { UserRow } from '@/types';
-import { User } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 
 export type RegisterParams = {
   email: string;
@@ -15,7 +15,7 @@ export type RegisterParams = {
 };
 
 export class AuthOrchestrator {
-  static async register(params: RegisterParams): Promise<{ authUser: User; profile: UserRow }> {
+  static async register(params: RegisterParams): Promise<{ authUser: User; session: Session | null; profile: UserRow | null }> {
     const supabase = await createClient();
 
     // 1. SignUp su Supabase Auth
@@ -38,8 +38,8 @@ export class AuthOrchestrator {
 
     const userId = authData.user.id;
 
-    // 2. Inserimento/Aggiornamento Profilo su public.users (Upsert)
-    let newUser: UserRow;
+    // 2. Inserimento/Aggiornamento Profilo su public.users (Upsert o gestito da trigger DB)
+    let newUser: UserRow | null = null;
     try {
       newUser = await UserService.upsertUserProfile({
         id: userId,
@@ -50,11 +50,15 @@ export class AuthOrchestrator {
         is_active: true,
       });
     } catch (err: any) {
-      console.error('❌ ERRORE GESTIONE TABELLA USERS:', err.message);
-      throw new Error(`Errore creazione profilo: ${err.message}`);
+      console.warn('⚠️ Profilo users gestito da trigger DB o RLS:', err.message);
+      try {
+        newUser = await UserService.findById(userId);
+      } catch {
+        newUser = null;
+      }
     }
 
-    // 3. Salva Consensi nel DB
+    // 3. Salva Consensi nel DB (se consentito da RLS o trigger)
     try {
       await ConsensiService.saveInitialConsents({
         userId,
@@ -62,11 +66,10 @@ export class AuthOrchestrator {
         marketingAccettato: !!params.marketingAccettato,
       });
     } catch (err: any) {
-      console.error('❌ ERRORE SALVATAGGIO CONSENSI:', err.message);
-      throw new Error(`Errore registrazione consensi: ${err.message}`);
+      console.warn('⚠️ Registrazione consensi differita:', err.message);
     }
 
-    return { authUser: authData.user, profile: newUser };
+    return { authUser: authData.user, session: authData.session, profile: newUser };
   }
 
   static async login(email: string, password: string): Promise<{ user: User; profile: UserRow }> {

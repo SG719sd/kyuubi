@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getHubContext } from '@/server/auth/context';
 import { ServiziService } from '@/server/services/servizi.service';
 import { ProfessionistiService } from '@/server/services/professionisti.service';
-import { createClient } from '@/utils/supabase/server';
+import { ProfessionistiServiziService } from '@/server/services/professionisti-servizi.service';
 import ServiziProfessionistiView from '@/components/views/dashboard/servizi-professionisti/servizi-professionisti-view';
 import HubPageWrapper from '@/components/layout/wrapper/HubPageWrapper';
 import BackButton from '@/components/layout/back-button';
@@ -19,13 +19,11 @@ export default async function ServiziProfessionistiPage({
 
   if (!ctx) notFound();
 
-  const supabase = await createClient();
-
-  // Carichiamo servizi base dell'Hub, lista dei professionisti e tutte le sovrascritture esistenti
-  const [servizi, professionisti, { data: personalizzazioni }] = await Promise.all([
+  // Carichiamo servizi base dell'Hub, lista dei professionisti e tutte le sovrascritture esistenti tramite Service
+  const [servizi, professionisti, personalizzazioni] = await Promise.all([
     ServiziService.listServizi(ctx.hubId),
     ProfessionistiService.listProfessionisti(ctx.hubId),
-    supabase.from('professionisti_servizi').select('*').eq('id_hub', ctx.hubId),
+    ProfessionistiServiziService.listByHub(ctx.hubId),
   ]);
 
   return (
