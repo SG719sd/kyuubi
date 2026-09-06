@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* 1. Definizione della modalità scura per Tailwind v4 basata sulla classe .dark */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 2. Definizione dei colori e body (Chiaro di default, Scuro con .dark) */
+@layer base {
+  body {
+    /* Tema Chiaro (Default): Sfondo bianco, Testo scuro/grigio */
+    @apply bg-white text-slate-900 transition-colors duration-300;
+  }
+
+  .dark body {
+    /* Tema Scuro (Controparte): Sfondo Slate molto scuro, Testo Slate chiaro */
+    @apply bg-slate-950 text-slate-100;
+  }
+}
+
