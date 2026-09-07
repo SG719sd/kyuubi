@@ -916,6 +916,7 @@ export type Database = {
           email: string | null
           id: number
           id_hub: string
+          id_user: string | null
           indirizzo: string | null
           is_active: boolean
           nome: string
@@ -930,6 +931,7 @@ export type Database = {
           email?: string | null
           id?: number
           id_hub: string
+          id_user?: string | null
           indirizzo?: string | null
           is_active?: boolean
           nome: string
@@ -944,6 +946,7 @@ export type Database = {
           email?: string | null
           id?: number
           id_hub?: string
+          id_user?: string | null
           indirizzo?: string | null
           is_active?: boolean
           nome?: string
@@ -957,6 +960,13 @@ export type Database = {
             columns: ["id_hub"]
             isOneToOne: false
             referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_rubrica_user"
+            columns: ["id_user"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

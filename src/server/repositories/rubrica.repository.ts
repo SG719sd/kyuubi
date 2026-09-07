@@ -44,6 +44,7 @@ export class RubricaRepository {
       .insert({
         ...payload,
         email: payload.email || null,
+        id_user: payload.id_user || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -62,6 +63,7 @@ export class RubricaRepository {
       .update({
         ...payload,
         email: payload.email || null,
+        ...(payload.id_user !== undefined ? { id_user: payload.id_user || null } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

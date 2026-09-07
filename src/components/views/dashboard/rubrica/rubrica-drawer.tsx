@@ -27,6 +27,7 @@ export default function RubricaDrawer({
   const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
   const [indirizzo, setIndirizzo] = useState('');
+  const [idUser, setIdUser] = useState('');
   const [note, setNote] = useState('');
   const [isActive, setIsActive] = useState(true);
 
@@ -37,6 +38,7 @@ export default function RubricaDrawer({
       setTelefono(contatto.telefono || '');
       setEmail(contatto.email || '');
       setIndirizzo(contatto.indirizzo || '');
+      setIdUser(contatto.id_user || '');
       setNote(contatto.note || '');
       setIsActive(Boolean(contatto.is_active));
     } else {
@@ -45,6 +47,7 @@ export default function RubricaDrawer({
       setTelefono('');
       setEmail('');
       setIndirizzo('');
+      setIdUser('');
       setNote('');
       setIsActive(true);
     }
@@ -59,6 +62,7 @@ export default function RubricaDrawer({
 
     const payload = {
       id_hub: hubId,
+      id_user: idUser.trim() || null,
       nome,
       cognome: cognome || null,
       telefono: telefono || null,
@@ -190,6 +194,22 @@ export default function RubricaDrawer({
                 placeholder="Via Roma 12"
                 className="w-full border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                ID Utente Collegato <span className="text-slate-400 font-normal">(UUID Auth opzionale)</span>
+              </label>
+              <input
+                type="text"
+                value={idUser}
+                onChange={(e) => setIdUser(e.target.value)}
+                placeholder="Es. c0a80101-0000-0000-0000-000000000000"
+                className="w-full border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs font-mono bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Se impostato, collega questo contatto rubrica all'utente registrato e ne popolerà in automatico l'ID nelle prenotazioni.
+              </p>
             </div>
 
             <div>

@@ -98,11 +98,21 @@ export default function RubricaView({
                       <h3 className="font-bold text-sm text-slate-900 dark:text-white truncate">
                         {contatto.nome} {contatto.cognome || ''}
                       </h3>
-                      {!contatto.is_active && (
-                        <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full">
-                          Inattivo
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {contatto.id_user && (
+                          <span
+                            className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded-md flex items-center gap-1"
+                            title={`Account utente collegato: ${contatto.id_user}`}
+                          >
+                            <User className="w-2.5 h-2.5" /> Utente collegato
+                          </span>
+                        )}
+                        {!contatto.is_active && (
+                          <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full">
+                            Inattivo
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

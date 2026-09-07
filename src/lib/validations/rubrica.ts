@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const rubricaSchema = z.object({
   id_hub: z.string().uuid('ID Hub non valido'),
+  id_user: z.string().uuid('ID Utente non valido').or(z.literal('')).nullable().optional(),
   nome: z.string().min(1, 'Il nome è obbligatorio').max(100, 'Massimo 100 caratteri'),
   cognome: z.string().max(100, 'Massimo 100 caratteri').nullable().optional(),
   telefono: z.string().max(30, 'Massimo 30 caratteri').nullable().optional(),

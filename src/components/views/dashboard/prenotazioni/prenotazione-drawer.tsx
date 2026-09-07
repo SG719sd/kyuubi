@@ -453,11 +453,15 @@ export default function PrenotazioneDrawer({
       }
     }
 
+    const selectedCliente = selectedClienteId ? clienti.find((c) => c.id === selectedClienteId) : null;
+    const resolvedUserId = selectedCliente?.id_user || initialData?.id_user || null;
+
     const payload = {
       id: initialData ? initialData.id : undefined,
       id_hub: hubId,
       id_professionista: selectedStaffId || null,
       id_rubrica: selectedClienteId || null,
+      id_user: resolvedUserId,
       titolo: generatedTitle,
       note: note.trim() || null,
       stato,

@@ -297,6 +297,7 @@ create index if not exists idx_piatti_hub on public.piatti using btree (id_hub);
 create table if not exists public.rubrica (
     id serial not null,
     id_hub uuid not null,
+    id_user uuid null,
     nome text not null,
     cognome text null,
     telefono text null,
@@ -309,6 +310,7 @@ create table if not exists public.rubrica (
     deleted_at timestamp with time zone null,
     constraint rubrica_pkey primary key (id),
     constraint fk_rubrica_hub foreign key (id_hub) references public.hubs (id) on delete cascade,
+    constraint fk_rubrica_user foreign key (id_user) references auth.users (id) on delete set null,
     constraint chk_rubrica_nome check (char_length(nome) <= 100),
     constraint chk_rubrica_cognome check (char_length(cognome) <= 100),
     constraint chk_rubrica_telefono check (char_length(telefono) <= 30),
@@ -318,6 +320,7 @@ create table if not exists public.rubrica (
 );
 
 create index if not exists idx_rubrica_hub on public.rubrica using btree (id_hub);
+create index if not exists idx_rubrica_user on public.rubrica using btree (id_user);
 
 -- 11. Tabella Abilitazioni & Override Servizi per Professionista
 create table if not exists public.professionisti_servizi (
