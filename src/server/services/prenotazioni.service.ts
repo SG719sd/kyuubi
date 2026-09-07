@@ -153,30 +153,48 @@ export class PrenotazioniService {
     // 1. Recupera gli orari di apertura dell'Hub per quel giorno della settimana
     const targetDate = new Date(data);
     const dayOfWeek = targetDate.getDay(); // 0 = Domenica, 1 = Lunedi, ..., 6 = Sabato
-    // Mappiamo 0-6 su 1-7 se la tabella usa standard ISO (1 = Lunedi)
+    const mappedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
     const orari = await OrariService.listOrari(id_hub);
 
-    // Cerca l'orario per il giorno corrente
-    // Nel sistema il giorno della settimana è 1 per Lunedì, 7 per Domenica o 0-6
-    const mappedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-    const orarioGiorno = orari.find((o) => {
-      if (o.giorno_settimana !== undefined) {
-        return (
-          (o.giorno_settimana === mappedDay || o.giorno_settimana === dayOfWeek) &&
-          !o.is_chiuso &&
-          (!id_professionista || o.id_professionista === id_professionista || o.id_professionista === null)
-        );
-      }
-      return false;
-    });
+    let orarioGiorno: (typeof orari)[0] | null = null;
 
-    // Se l'hub o professionista è chiuso in quel giorno
-    if (!orarioGiorno || orarioGiorno.is_chiuso || !orarioGiorno.ora_inizio_1 || !orarioGiorno.ora_fine_1) {
-      return {
-        aperto: false,
-        slotLiberi: [],
-        motivo: 'Chiuso nel giorno selezionato',
-      };
+    if (id_professionista) {
+      // Cerca se esiste un orario configurato specificamente per questo professionista
+      const orarioProf = orari.find(
+        (o) =>
+          Number(o.id_professionista) === Number(id_professionista) &&
+          (o.giorno_settimana === mappedDay || o.giorno_settimana === dayOfWeek)
+      );
+
+      if (orarioProf) {
+        // Se il professionista ha un orario configurato ma è chiuso o senza ore
+        if (orarioProf.is_chiuso || !orarioProf.ora_inizio_1 || !orarioProf.ora_fine_1) {
+          return {
+            aperto: false,
+            slotLiberi: [],
+            motivo: 'Il professionista selezionato non è in servizio o è chiuso in questa data',
+          };
+        }
+        orarioGiorno = orarioProf;
+      }
+    }
+
+    // Se non c'è un orario specifico del professionista, ripiega sull'orario generale dell'Hub
+    if (!orarioGiorno) {
+      const orarioHub = orari.find(
+        (o) =>
+          (!o.id_professionista || o.id_professionista === null) &&
+          (o.giorno_settimana === mappedDay || o.giorno_settimana === dayOfWeek)
+      );
+
+      if (!orarioHub || orarioHub.is_chiuso || !orarioHub.ora_inizio_1 || !orarioHub.ora_fine_1) {
+        return {
+          aperto: false,
+          slotLiberi: [],
+          motivo: "L'Hub è chiuso nel giorno selezionato",
+        };
+      }
+      orarioGiorno = orarioHub;
     }
 
     // 2. Recupera prenotazioni occupate per quel giorno
@@ -191,15 +209,17 @@ export class PrenotazioniService {
     );
 
     // Costruisci i turni di apertura (Turno 1 obbligatorio, Turno 2 facoltativo)
-    const turni: Array<{ inizio: string; fine: string }> = [
-      { inizio: orarioGiorno.ora_inizio_1, fine: orarioGiorno.ora_fine_1 },
-    ];
+    const turni: Array<{ inizio: string; fine: string }> = [];
+    if (orarioGiorno.ora_inizio_1 && orarioGiorno.ora_fine_1) {
+      turni.push({ inizio: orarioGiorno.ora_inizio_1, fine: orarioGiorno.ora_fine_1 });
+    }
     if (orarioGiorno.ora_inizio_2 && orarioGiorno.ora_fine_2) {
       turni.push({ inizio: orarioGiorno.ora_inizio_2, fine: orarioGiorno.ora_fine_2 });
     }
 
     const slotStepMinutes = 15;
     const slotList: { inizio: string; fine: string; disponibile: boolean }[] = [];
+    const pad = (n: number) => String(n).padStart(2, '0');
 
     for (const turno of turni) {
       const [startHour, startMinute] = turno.inizio.split(':').map(Number);
@@ -228,9 +248,12 @@ export class PrenotazioniService {
           );
         });
 
+        const startStr = `${pad(currentSlotStart.getHours())}:${pad(currentSlotStart.getMinutes())}`;
+        const endStr = `${pad(currentSlotEnd.getHours())}:${pad(currentSlotEnd.getMinutes())}`;
+
         slotList.push({
-          inizio: currentSlotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          fine: currentSlotEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          inizio: startStr,
+          fine: endStr,
           disponibile: !isOverlap,
         });
 

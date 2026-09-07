@@ -3,7 +3,6 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, UserCheck, Image as ImageIcon, User } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 import { compressAndConvertToWebP } from "@/lib/image-optimizer";
 import { getHubStoragePath } from "@/types/storage-paths";
 import {
@@ -11,6 +10,7 @@ import {
   updateProfessionistaAction,
   updateImmagineProfessionistaAction,
 } from "@/server/actions/professionisti.actions";
+import { uploadMediaAction } from "@/server/actions/storage.actions";
 
 const PRESET_COLORS = [
   "#3B82F6", // Blu
@@ -102,8 +102,6 @@ export default function ProfessionistaDrawer({
     e.preventDefault();
     setErrorMsg(null);
 
-    const supabase = createClient();
-
     const payload = {
       ...form,
       id_hub: hubId,
@@ -141,7 +139,7 @@ export default function ProfessionistaDrawer({
       }
     }
 
-    // 2. Elaborazione e Upload Foto Professionista
+    // 2. Elaborazione e Upload Foto Professionista via Server Action
     if (imageFile && profId) {
       try {
         const webpBlob = await compressAndConvertToWebP(
@@ -153,25 +151,16 @@ export default function ProfessionistaDrawer({
         const fileName = `prof_${profId}.webp`;
         const storagePath = getHubStoragePath.professionista(hubId, fileName);
 
-        // Upload con bypass cache CDN Supabase (cacheControl: '0')
-        const { error: uploadError } = await supabase.storage
-          .from("hubs_media")
-          .upload(storagePath, webpBlob, {
-            contentType: "image/webp",
-            upsert: true,
-            cacheControl: "0",
-          });
+        const formData = new FormData();
+        formData.append("file", webpBlob, fileName);
+        formData.append("storagePath", storagePath);
 
-        if (uploadError) throw new Error(uploadError.message);
+        const uploadRes = await uploadMediaAction(formData);
+        if (!uploadRes.success || !uploadRes.url) {
+          throw new Error(uploadRes.error || "Errore upload immagine");
+        }
 
-        // Recupero URL pubblico
-        const { data: publicUrlData } = supabase.storage
-          .from("hubs_media")
-          .getPublicUrl(storagePath);
-
-        const basePublicUrl = publicUrlData.publicUrl;
-        // Timestamp per forzare il refresh immediato nel browser
-        const displayUrl = `${basePublicUrl}?t=${Date.now()}`;
+        const displayUrl = uploadRes.url;
 
         // Salva l'URL con il query string di cache busting
         await updateImmagineProfessionistaAction(profId, displayUrl, hubSlug);

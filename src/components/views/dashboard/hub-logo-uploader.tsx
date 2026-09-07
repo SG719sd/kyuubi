@@ -2,12 +2,12 @@
 
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
 import { compressAndConvertToWebP } from '@/lib/image-optimizer';
 import { getHubStoragePath } from '@/types/storage-paths';
 import { Store, Camera, Trash2, Loader2 } from 'lucide-react';
 
 import { updateHubLogoAction } from '@/server/actions/hub-info.actions';
+import { uploadMediaAction, deleteMediaAction } from '@/server/actions/storage.actions';
 
 interface HubLogoUploaderProps {
   hubId: string;
@@ -26,17 +26,15 @@ export function HubLogoUploader({
   isAdmin = false,
 }: HubLogoUploaderProps) {
   const router = useRouter();
-  const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [logoUrl, setLogoUrl] = useState<string | null>(currentLogoUrl);
   const [loading, setLoading] = useState(false);
 
-  const BUCKET_NAME = 'hubs_media';
   // Genera il path coerente: {hubId}/logo/logo.webp
   const storageFilePath = getHubStoragePath.logo(hubId, 'logo.webp');
 
-  // 1 & 2. CARICA, COMPRIMI E CONVERTI IN WEBP
+  // 1 & 2. CARICA, COMPRIMI E CONVERTI IN WEBP VIA SERVER ACTION
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     
@@ -53,33 +51,22 @@ export function HubLogoUploader({
       // Compressione e conversione in WebP (max 800x800, qualità 82%)
       const compressedWebpBlob = await compressAndConvertToWebP(file, 800, 800, 0.82);
 
-      // Upload nello storage 'hubs_media' con contentType esplicito
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(storageFilePath, compressedWebpBlob, {
-          contentType: 'image/webp',
-          upsert: true,
-          cacheControl: '0',
-        });
+      // Caricamento sicuro via Server Action
+      const formData = new FormData();
+      formData.append('file', compressedWebpBlob, 'logo.webp');
+      formData.append('storagePath', storageFilePath);
 
-      if (uploadError) {
-        throw new Error(`Storage error: ${uploadError.message}`);
+      const uploadRes = await uploadMediaAction(formData);
+      if (!uploadRes.success || !uploadRes.url) {
+        throw new Error(uploadRes.error || 'Errore durante il caricamento del logo');
       }
 
-      // Recupera URL pubblico
-      const { data: publicUrlData } = supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(storageFilePath);
-
-      const basePublicUrl = publicUrlData.publicUrl;
-      const displayUrl = `${basePublicUrl}?t=${Date.now()}`;
+      const displayUrl = uploadRes.url;
 
       // Aggiorna DB tramite Server Action
-      if (logoUrl !== basePublicUrl) {
-        const updateRes = await updateHubLogoAction(slugHub, basePublicUrl);
-        if (!updateRes.success) {
-          throw new Error(updateRes.error || 'Errore salvataggio logo');
-        }
+      const updateRes = await updateHubLogoAction(slugHub, displayUrl);
+      if (!updateRes.success) {
+        throw new Error(updateRes.error || 'Errore salvataggio logo');
       }
 
       setLogoUrl(displayUrl);
@@ -112,13 +99,7 @@ export function HubLogoUploader({
     setLoading(true);
 
     try {
-      const { error: storageError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .remove([storageFilePath]);
-
-      if (storageError) {
-        console.warn('File non trovato o già rimosso nello storage:', storageError.message);
-      }
+      await deleteMediaAction(storageFilePath);
 
       const updateRes = await updateHubLogoAction(slugHub, null);
       if (!updateRes.success) {

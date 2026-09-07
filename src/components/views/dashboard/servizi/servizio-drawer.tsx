@@ -3,7 +3,6 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Wrench, Image as ImageIcon } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 import { compressAndConvertToWebP } from "@/lib/image-optimizer";
 import { getHubStoragePath } from "@/types/storage-paths";
 import {
@@ -11,6 +10,7 @@ import {
   updateServizioAction,
   updateImmagineServizioAction,
 } from "@/server/actions/servizi.actions";
+import { uploadMediaAction } from "@/server/actions/storage.actions";
 
 export default function ServizioDrawer({
   isOpen,
@@ -111,8 +111,6 @@ export default function ServizioDrawer({
     e.preventDefault();
     setErrorMsg(null);
 
-    const supabase = createClient();
-
     const payload = {
       ...form,
       id_hub: hubId,
@@ -147,7 +145,7 @@ export default function ServizioDrawer({
       }
     }
 
-    // 2. Elaborazione e Upload Immagine Servizio
+    // 2. Elaborazione e Upload Immagine Servizio via Server Action
     if (imageFile && servizioId) {
       try {
         const webpBlob = await compressAndConvertToWebP(
@@ -159,25 +157,16 @@ export default function ServizioDrawer({
         const fileName = `${servizioId}.webp`;
         const storagePath = getHubStoragePath.servizio(hubId, fileName);
 
-        // Upload con bypass della cache CDN Supabase (cacheControl: '0')
-        const { error: uploadError } = await supabase.storage
-          .from("hubs_media")
-          .upload(storagePath, webpBlob, {
-            contentType: "image/webp",
-            upsert: true,
-            cacheControl: "0",
-          });
+        const formData = new FormData();
+        formData.append("file", webpBlob, fileName);
+        formData.append("storagePath", storagePath);
 
-        if (uploadError) throw new Error(uploadError.message);
+        const uploadRes = await uploadMediaAction(formData);
+        if (!uploadRes.success || !uploadRes.url) {
+          throw new Error(uploadRes.error || "Errore upload immagine");
+        }
 
-        // Recupero dell'URL pubblico base
-        const { data: publicUrlData } = supabase.storage
-          .from("hubs_media")
-          .getPublicUrl(storagePath);
-
-        const basePublicUrl = publicUrlData.publicUrl;
-        // Timestamp per invalidare la cache nel browser lato client
-        const displayUrl = `${basePublicUrl}?t=${Date.now()}`;
+        const displayUrl = uploadRes.url;
 
         // Aggiornamento database con l'URL completo di timestamp
         await updateImmagineServizioAction(servizioId, displayUrl, hubSlug);

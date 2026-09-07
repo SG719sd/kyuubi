@@ -78,6 +78,19 @@ export async function deletePrenotazioneAction(
   }
 }
 
+export async function getPrenotazioneAction(id: number, hubId: string) {
+  try {
+    const data = await PrenotazioniService.getPrenotazioneById(id, hubId);
+    if (!data) return { success: false, error: 'Prenotazione non trovata' };
+    return { success: true, data };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Errore durante il recupero della prenotazione',
+    };
+  }
+}
+
 export async function calcolaSlotDisponibiliAction(query: RicercaSlotQueryInput) {
   try {
     const result = await PrenotazioniService.calcolaSlotDisponibili(query);

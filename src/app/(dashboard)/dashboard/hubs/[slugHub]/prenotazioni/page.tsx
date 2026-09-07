@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getHubContext } from '@/server/auth/context';
 import { PrenotazioniService } from '@/server/services/prenotazioni.service';
 import { ProfessionistiService } from '@/server/services/professionisti.service';
+import { ProfessionistiServiziService } from '@/server/services/professionisti-servizi.service';
 import { RubricaService } from '@/server/services/rubrica.service';
 import { ServiziService } from '@/server/services/servizi.service';
 import { ProdottiService } from '@/server/services/prodotti.service';
@@ -26,6 +27,7 @@ export default async function PrenotazioniPage({
   const [
     prenotazioni,
     professionisti,
+    professionistiServizi,
     clienti,
     servizi,
     prodotti,
@@ -33,6 +35,7 @@ export default async function PrenotazioniPage({
   ] = await Promise.all([
     PrenotazioniService.listPrenotazioni(ctx.hubId),
     ProfessionistiService.listProfessionisti(ctx.hubId),
+    ProfessionistiServiziService.listByHub(ctx.hubId),
     RubricaService.listContatti(ctx.hubId),
     ServiziService.listServizi(ctx.hubId),
     ProdottiService.listProdotti(ctx.hubId),
@@ -72,6 +75,7 @@ export default async function PrenotazioniPage({
       <PrenotazioniView
         prenotazioni={prenotazioni}
         professionisti={professionisti}
+        professionistiServizi={professionistiServizi}
         clienti={clienti}
         servizi={servizi}
         prodotti={prodotti}
