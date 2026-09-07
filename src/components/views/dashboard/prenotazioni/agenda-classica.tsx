@@ -24,6 +24,8 @@ interface Props {
   professionisti: any[];
   clienti: any[];
   servizi: any[];
+  prodotti?: any[];
+  piatti?: any[];
   hubId: string;
   hubSlug: string;
   onSelectSlot: (slot: {
@@ -79,22 +81,37 @@ function getBookingDisplayTime(tms?: string | null): string {
   return `${hours}:${minutes}`;
 }
 
+// Risolve il nome dell'elemento da catalogo
+function resolveItemTitle(it: any, servizi: any[], prodotti?: any[], piatti?: any[]): string {
+  if (it.titolo) return it.titolo;
+  if (it.tipo === 'servizio') {
+    const s = servizi?.find((srv) => srv.id === it.id_item);
+    if (s) return s.titolo;
+  } else if (it.tipo === 'prodotto' && prodotti) {
+    const p = prodotti.find((prod) => prod.id === it.id_item);
+    if (p) return p.titolo;
+  } else if (it.tipo === 'piatto' && piatti) {
+    const pt = piatti.find((piat) => piat.id === it.id_item);
+    if (pt) return pt.titolo;
+  }
+  return `${it.tipo.charAt(0).toUpperCase() + it.tipo.slice(1)} #${it.id_item}`;
+}
+
 // Rileva se una prenotazione è un ordine, piatto, prodotto o senza orario fisso
 function isDishOrProductOrUntimed(p: PrenotazioneWithDetails): boolean {
-  if (p.ordini) return true;
+  // Se non c'è timestamp valido di inizio, è forzatamente senza orario
   if (!p.tms_inizio) return true;
 
-  // Se contiene piatti o prodotti
-  if (p.items && p.items.length > 0) {
-    const hasDish = p.items.some((it) => it.tipo === 'piatto');
-    const hasProduct = p.items.some((it) => it.tipo === 'prodotto');
-    const hasService = p.items.some((it) => it.tipo === 'servizio');
-    if ((hasDish || hasProduct) && !hasService) return true;
-  }
+  // Se è esplicitamente marcato come ordine senza orario fisso
+  if (p.ordini === true) return true;
 
-  // Se è impostata a mezzanotte (00:00:00 o 12:00:00 UTC senza durata servizi)
+  // Se ordini è false, è un appuntamento programmato con orario fisso (anche se contiene piatti o prodotti!)
+  if (p.ordini === false) return false;
+
+  // Fallback per record storici dove ordini è undefined:
+  // Se è impostata a mezzanotte UTC senza tempo minuti, consideralo senza orario
   const d = new Date(p.tms_inizio);
-  if (d.getHours() === 0 && d.getMinutes() === 0 && (!p.tempo_minuti || p.tempo_minuti === 0)) {
+  if (d.getUTCHours() === 12 && d.getUTCMinutes() === 0 && (!p.tempo_minuti || p.tempo_minuti === 0)) {
     return true;
   }
 
@@ -114,6 +131,10 @@ function getMonday(d: Date): Date {
 export default function AgendaClassica({
   prenotazioni,
   professionisti,
+  clienti: _clienti,
+  servizi,
+  prodotti = [],
+  piatti = [],
   hubId,
   hubSlug,
   onSelectSlot,
@@ -636,7 +657,7 @@ export default function AgendaClassica({
                         {order.items.map((it, idx) => (
                           <div key={idx} className="flex justify-between items-center text-[10px]">
                             <span className="truncate">
-                              {it.quantita}x Elemento #{it.id_item} ({it.tipo})
+                              {it.quantita}x {resolveItemTitle(it, servizi, prodotti, piatti)}
                             </span>
                             <span className="font-semibold shrink-0">€ {Number(it.prezzo).toFixed(2)}</span>
                           </div>
@@ -645,27 +666,27 @@ export default function AgendaClassica({
                     )}
 
                     {/* Footer con contatti rapidi */}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-                      <span className="text-[10px] text-slate-400">
+                    <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
                         {order.professionisti ? `Staff: ${order.professionisti.nome}` : 'Hub Generale'}
                       </span>
                       {phone && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={(e) => callPhone(e, phone)}
-                            className="p-1 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg cursor-pointer"
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition-colors cursor-pointer"
                             title="Chiama"
                           >
-                            <Phone className="w-3.5 h-3.5" />
+                            <Phone className="w-4 h-4" />
                           </button>
                           <button
                             type="button"
                             onClick={(e) => openWhatsApp(e, order)}
-                            className="p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg cursor-pointer"
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl transition-colors cursor-pointer"
                             title="WhatsApp"
                           >
-                            <MessageCircle className="w-3.5 h-3.5" />
+                            <MessageCircle className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -678,17 +699,78 @@ export default function AgendaClassica({
         </div>
       )}
 
+      {/* SELETTORE RAPIDO OPERATORE (Ottimizzato per Smartphone & Tablet) */}
+      {subView === 'giorno' && professionisti.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+          <button
+            type="button"
+            onClick={() => setSelectedStaffFilter('tutti')}
+            className={`px-3 py-1.5 rounded-xl font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+              selectedStaffFilter === 'tutti'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
+            }`}
+          >
+            <span>Tutti</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/10 dark:bg-white/20">
+              {professionisti.length}
+            </span>
+          </button>
+
+          {professionisti.map((p) => {
+            const isSelected = selectedStaffFilter === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedStaffFilter(p.id)}
+                className={`px-3 py-1.5 rounded-xl font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
+                }`}
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: p.colore || '#6366F1' }}
+                />
+                <span className="truncate">{p.nome}</span>
+              </button>
+            );
+          })}
+
+          {unassignedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedStaffFilter('non_assegnato')}
+              className={`px-3 py-1.5 rounded-xl font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                selectedStaffFilter === 'non_assegnato'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
+              }`}
+            >
+              <span>🏢 Hub ({unassignedCount})</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* VISTA 1: GIORNALIERA (ORARI SULLE RIGHE, OPERATORI SULLE COLONNE) */}
       {subView === 'giorno' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
-            <div className="min-w-[750px]">
+            <div className={columnsStaff.length === 1 ? 'w-full min-w-0' : 'min-w-[650px] sm:min-w-[750px]'}>
               {/* Header Colonne Operatori */}
               <div
                 className="grid border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 sticky top-0 z-10"
-                style={{ gridTemplateColumns: `80px repeat(${columnsStaff.length}, minmax(180px, 1fr))` }}
+                style={{
+                  gridTemplateColumns:
+                    columnsStaff.length === 1
+                      ? '70px 1fr'
+                      : `75px repeat(${columnsStaff.length}, minmax(170px, 1fr))`,
+                }}
               >
-                <div className="p-3 text-[11px] font-bold uppercase text-slate-400 dark:text-slate-500 text-center border-r border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                <div className="p-3 text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 text-center border-r border-slate-200 dark:border-slate-800 flex items-center justify-center sticky left-0 z-30 bg-slate-100 dark:bg-slate-900 shadow-xs">
                   <Clock className="w-3.5 h-3.5 mr-1" /> Ora
                 </div>
 
@@ -719,10 +801,15 @@ export default function AgendaClassica({
                   <div
                     key={time}
                     className="grid min-h-[56px]"
-                    style={{ gridTemplateColumns: `80px repeat(${columnsStaff.length}, minmax(180px, 1fr))` }}
+                    style={{
+                      gridTemplateColumns:
+                        columnsStaff.length === 1
+                          ? '70px 1fr'
+                          : `75px repeat(${columnsStaff.length}, minmax(170px, 1fr))`,
+                    }}
                   >
-                    {/* Indicatore Orario */}
-                    <div className="p-2 border-r border-slate-200/80 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center bg-slate-50/40 dark:bg-slate-950/30 select-none">
+                    {/* Indicatore Orario Sticky */}
+                    <div className="p-2 border-r border-slate-200/80 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs select-none sticky left-0 z-20 shadow-xs">
                       {time}
                     </div>
 
@@ -874,9 +961,9 @@ export default function AgendaClassica({
               {/* Header Colonne Giorni */}
               <div
                 className="grid border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 sticky top-0 z-10"
-                style={{ gridTemplateColumns: `80px repeat(7, 1fr)` }}
+                style={{ gridTemplateColumns: `75px repeat(7, minmax(130px, 1fr))` }}
               >
-                <div className="p-3 text-[11px] font-bold uppercase text-slate-400 dark:text-slate-500 text-center border-r border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                <div className="p-3 text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 text-center border-r border-slate-200 dark:border-slate-800 flex items-center justify-center sticky left-0 z-30 bg-slate-100 dark:bg-slate-900 shadow-xs">
                   <Clock className="w-3.5 h-3.5 mr-1" /> Ora
                 </div>
 
@@ -915,10 +1002,10 @@ export default function AgendaClassica({
               {/* RIGA SPECIALE SETTIMANALE: Ordini & Prodotti dell'intera giornata */}
               <div
                 className="grid border-b border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20 min-h-[48px]"
-                style={{ gridTemplateColumns: `80px repeat(7, 1fr)` }}
+                style={{ gridTemplateColumns: `75px repeat(7, minmax(130px, 1fr))` }}
               >
-                <div className="p-2 border-r border-amber-200/80 dark:border-amber-900/50 text-[10px] font-bold text-amber-800 dark:text-amber-300 flex items-center justify-center text-center">
-                  📦 Ordini / Piatti
+                <div className="p-2 border-r border-amber-200/80 dark:border-amber-900/50 text-[10px] font-bold text-amber-800 dark:text-amber-300 flex items-center justify-center text-center sticky left-0 z-20 bg-amber-100 dark:bg-amber-950 shadow-xs">
+                  📦 Ordini
                 </div>
 
                 {weekDays.map((day) => {
@@ -968,10 +1055,10 @@ export default function AgendaClassica({
                   <div
                     key={time}
                     className="grid min-h-[56px]"
-                    style={{ gridTemplateColumns: `80px repeat(7, 1fr)` }}
+                    style={{ gridTemplateColumns: `75px repeat(7, minmax(130px, 1fr))` }}
                   >
-                    {/* Indicatore Orario */}
-                    <div className="p-2 border-r border-slate-200/80 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center bg-slate-50/40 dark:bg-slate-950/30 select-none">
+                    {/* Indicatore Orario Sticky */}
+                    <div className="p-2 border-r border-slate-200/80 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs select-none sticky left-0 z-20 shadow-xs">
                       {time}
                     </div>
 
@@ -1049,6 +1136,8 @@ export default function AgendaClassica({
                                 : 'Cliente';
                               const phone = b.rubrica?.telefono;
                               const displayTime = getBookingDisplayTime(b.tms_inizio);
+                              const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
+                              const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
 
                               return (
                                 <div
@@ -1072,9 +1161,13 @@ export default function AgendaClassica({
                                       <Clock className="w-2.5 h-2.5 text-indigo-500" />
                                       {displayTime}
                                     </span>
-                                    <span className="text-[9px] opacity-70">
-                                      {b.tempo_minuti || 30}m
-                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      {hasDishes && <span title="Piatto">🍕</span>}
+                                      {hasProducts && <span title="Prodotto">🛍️</span>}
+                                      <span className="text-[9px] opacity-70">
+                                        {b.tempo_minuti || 30}m
+                                      </span>
+                                    </div>
                                   </div>
 
                                   <div className="font-extrabold text-[11px] leading-tight truncate">

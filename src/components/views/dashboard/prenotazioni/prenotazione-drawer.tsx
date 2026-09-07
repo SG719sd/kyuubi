@@ -150,13 +150,9 @@ export default function PrenotazioneDrawer({
           };
         });
         setItems(mappedItems);
-        const isOrderNoTime =
-          initialData.ordini ||
-          !initialData.tms_inizio ||
-          (initialData.items &&
-            initialData.items.length > 0 &&
-            initialData.items.every((it) => it.tipo === 'piatto' || it.tipo === 'prodotto'));
-        setSenzaOrario(Boolean(isOrderNoTime));
+        // Se ordini è true oppure manca tms_inizio è senza orario fisso
+        const isUntimed = Boolean(initialData.ordini) || !initialData.tms_inizio;
+        setSenzaOrario(isUntimed);
       } else {
         setItems([]);
         setSenzaOrario(Boolean(initialData.ordini));
@@ -261,6 +257,54 @@ export default function PrenotazioneDrawer({
     }
   }, [dateStr, timeStr, totalMinutes]);
 
+  // Modifica rapida della durata totale (es. 45 min invece di 60)
+  const applyTotalDuration = (targetDuration: number) => {
+    const clamped = Math.max(5, targetDuration);
+    if (items.length === 0) return;
+
+    if (items.length === 1) {
+      const qta = Math.max(1, items[0].quantita);
+      setItems((prev) => [
+        { ...prev[0], tempo_minuti: Math.round(clamped / qta) }
+      ]);
+    } else {
+      // Se ci sono servizi, applica la modifica al primo servizio, altrimenti al primo item
+      const serviceIdx = items.findIndex((it) => it.tipo === 'servizio');
+      const targetIdx = serviceIdx !== -1 ? serviceIdx : 0;
+
+      const otherDuration = items.reduce((sum, it, idx) => {
+        if (idx === targetIdx) return sum;
+        return sum + (it.tempo_minuti || 0) * (it.quantita || 1);
+      }, 0);
+
+      const remainingForTarget = Math.max(5, clamped - otherDuration);
+      const qta = Math.max(1, items[targetIdx].quantita);
+
+      setItems((prev) =>
+        prev.map((it, idx) =>
+          idx === targetIdx
+            ? { ...it, tempo_minuti: Math.round(remainingForTarget / qta) }
+            : it
+        )
+      );
+    }
+  };
+
+  // Modifica durata digitando l'orario di fine desiderato
+  const handleEndTimeChange = (newEndTime: string) => {
+    if (!newEndTime || !timeStr) return;
+    try {
+      const [startH, startM] = timeStr.split(':').map(Number);
+      const [endH, endM] = newEndTime.split(':').map(Number);
+      let diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+      if (diffMinutes < 0) diffMinutes += 24 * 60;
+      if (diffMinutes <= 0) diffMinutes = 15;
+      applyTotalDuration(diffMinutes);
+    } catch (err) {
+      console.error('Errore calcolo durata da orario fine:', err);
+    }
+  };
+
   // Handle adding an item to the list
   const handleAddItem = () => {
     if (!selectedCatalogItemId) return;
@@ -330,6 +374,13 @@ export default function PrenotazioneDrawer({
   const handleUpdateItemPrice = (index: number, price: number) => {
     setItems((prev) =>
       prev.map((it, i) => (i === index ? { ...it, prezzo: price } : it))
+    );
+  };
+
+  const handleUpdateItemDuration = (index: number, minutes: number) => {
+    const clamped = Math.max(0, minutes);
+    setItems((prev) =>
+      prev.map((it, i) => (i === index ? { ...it, tempo_minuti: clamped } : it))
     );
   };
 
@@ -411,7 +462,7 @@ export default function PrenotazioneDrawer({
       note: note.trim() || null,
       stato,
       agenda: true,
-      ordini: senzaOrario || items.some((i) => i.tipo === 'prodotto' || i.tipo === 'piatto'),
+      ordini: Boolean(senzaOrario),
       tms_inizio: startISO,
       items: items.map((it) => ({
         id_item: it.id_item,
@@ -710,13 +761,22 @@ export default function PrenotazioneDrawer({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                        Fine Prevista (Calc.)
-                      </label>
-                      <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
-                        <span>{calculatedEndTime || '--:--'}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">({totalMinutes} min)</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                          Ora Fine (Modificabile)
+                        </label>
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                          {totalMinutes} min
+                        </span>
                       </div>
+                      <input
+                        type="time"
+                        required
+                        value={calculatedEndTime}
+                        onChange={(e) => handleEndTimeChange(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:ring-2 focus:ring-indigo-500/20"
+                        title="Modifica l'orario di fine per ricalcolare automaticamente la durata"
+                      />
                     </div>
                   </>
                 ) : (
@@ -727,6 +787,56 @@ export default function PrenotazioneDrawer({
                   </div>
                 )}
               </div>
+
+              {/* Controlli Durata Rapida & Presets */}
+              {!senzaOrario && (
+                <div className="pt-2.5 border-t border-slate-200/80 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                      Regola Durata Totale:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => applyTotalDuration(Math.max(5, totalMinutes - 15))}
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shadow-2xs"
+                        title="Sottrai 15 minuti"
+                      >
+                        -15m
+                      </button>
+                      <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 min-w-[50px] text-center">
+                        {totalMinutes} min
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => applyTotalDuration(totalMinutes + 15)}
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shadow-2xs"
+                        title="Aggiungi 15 minuti"
+                      >
+                        +15m
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preset chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[15, 30, 45, 60, 75, 90, 120].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => applyTotalDuration(mins)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          totalMinutes === mins
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600 hover:border-indigo-300'
+                        }`}
+                      >
+                        {mins}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Messaggio o Avviso Slot */}
               {slotMessage && (
@@ -852,21 +962,33 @@ export default function PrenotazioneDrawer({
                             {it.titolo}
                           </span>
                         </div>
-                        {it.tempo_minuti > 0 && (
-                          <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                            <Clock className="w-3 h-3" />
-                            {it.tempo_minuti} min ciascuno
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <div
+                            className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700"
+                            title="Modifica durata per questo elemento"
+                          >
+                            <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <input
+                              type="number"
+                              min="0"
+                              step="5"
+                              value={it.tempo_minuti}
+                              onChange={(e) => handleUpdateItemDuration(idx, parseInt(e.target.value) || 0)}
+                              className="w-10 bg-transparent text-xs font-bold text-slate-900 dark:text-white text-right focus:outline-none"
+                            />
+                            <span className="text-[10px] text-slate-500">min</span>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Quantità e Prezzo */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
+                      {/* Quantità, Prezzo e Rimuovi */}
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
+                        {/* Quantità */}
+                        <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-1.5 py-0.5">
                           <button
                             type="button"
                             onClick={() => handleUpdateItemQuantity(idx, it.quantita - 1)}
-                            className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold flex items-center justify-center hover:bg-slate-200 cursor-pointer"
+                            className="w-6 h-6 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold flex items-center justify-center hover:bg-slate-100 cursor-pointer text-xs"
                           >
                             -
                           </button>
@@ -876,21 +998,21 @@ export default function PrenotazioneDrawer({
                           <button
                             type="button"
                             onClick={() => handleUpdateItemQuantity(idx, it.quantita + 1)}
-                            className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold flex items-center justify-center hover:bg-slate-200 cursor-pointer"
+                            className="w-6 h-6 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold flex items-center justify-center hover:bg-slate-100 cursor-pointer text-xs"
                           >
                             +
                           </button>
                         </div>
 
                         {/* Prezzo modificabile */}
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2 py-1">
                           <span className="text-xs text-slate-400">€</span>
                           <input
                             type="number"
                             step="0.5"
                             value={it.prezzo}
                             onChange={(e) => handleUpdateItemPrice(idx, parseFloat(e.target.value) || 0)}
-                            className="w-16 px-2 py-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white text-right"
+                            className="w-14 bg-transparent text-xs font-bold text-slate-900 dark:text-white text-right focus:outline-none"
                           />
                         </div>
 
@@ -898,7 +1020,8 @@ export default function PrenotazioneDrawer({
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
-                          className="text-slate-400 hover:text-rose-500 p-1 cursor-pointer"
+                          className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="Rimuovi elemento"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
