@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Search, Phone, Mail, MapPin, User, Edit3, Trash2 } from 'lucide-react';
+import { Plus, Search, Phone, Mail, MapPin, User, Edit3, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import RubricaDrawer from './rubrica-drawer';
 import { deleteRubricaAction } from '@/server/actions/rubrica.actions';
 
@@ -19,6 +19,8 @@ export default function RubricaView({
   const [search, setSearch] = useState('');
   const [selectedContatto, setSelectedContatto] = useState<any | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
 
   const filteredContatti = contatti.filter((c) => {
     const term = search.toLowerCase();
@@ -27,6 +29,23 @@ export default function RubricaView({
     const email = (c.email || '').toLowerCase();
     return nomeCompleto.includes(term) || tel.includes(term) || email.includes(term);
   });
+
+  const totalItems = filteredContatti.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedContatti = filteredContatti.slice(startIndex, endIndex);
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
 
   const handleOpenCreate = () => {
     setSelectedContatto(null);
@@ -43,6 +62,22 @@ export default function RubricaView({
     await deleteRubricaAction(id, hubSlug);
   };
 
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safePage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (safePage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safePage - 1, safePage, safePage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   return (
     <div className="space-y-6">
       {/* Toolbar Gestionale (Allineata con gli altri moduli) */}
@@ -53,13 +88,29 @@ export default function RubricaView({
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Cerca per nome, cognome o telefono..."
               className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-slate-400"
             />
           </div>
-          <div className="text-xs text-slate-500 font-medium px-1 shrink-0">
-            Totale: <span className="text-slate-900 dark:text-white font-bold">{filteredContatti.length}</span>
+          <div className="flex items-center gap-3 text-xs text-slate-500 font-medium px-1 shrink-0">
+            <span>
+              Totale: <span className="text-slate-900 dark:text-white font-bold">{totalItems}</span>
+            </span>
+            {totalItems > 12 && (
+              <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-3">
+                <span className="text-[11px] text-slate-400">Mostra:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value={12}>12</option>
+                  <option value={24}>24</option>
+                  <option value={48}>48</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
