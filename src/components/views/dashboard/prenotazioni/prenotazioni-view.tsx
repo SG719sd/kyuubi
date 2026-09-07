@@ -57,7 +57,13 @@ export default function PrenotazioniView({
   // Drawer state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedPrenotazione, setSelectedPrenotazione] = useState<PrenotazioneWithDetails | null>(null);
-  const [initialSlot, setInitialSlot] = useState<{ date?: string; time?: string; staffId?: number | null }>({});
+  const [initialSlot, setInitialSlot] = useState<{
+    date?: string;
+    time?: string;
+    staffId?: number | null;
+    senzaOrario?: boolean;
+    itemType?: 'servizio' | 'prodotto' | 'piatto';
+  }>({});
 
   // Status Colors & Badges
   const getStatusBadge = (stato: string) => {
@@ -181,7 +187,13 @@ export default function PrenotazioniView({
     setIsDrawerOpen(true);
   };
 
-  const handleSelectSlotFromAgenda = (slot: { date: string; time: string; staffId?: number | null }) => {
+  const handleSelectSlotFromAgenda = (slot: {
+    date: string;
+    time?: string;
+    staffId?: number | null;
+    senzaOrario?: boolean;
+    itemType?: 'servizio' | 'prodotto' | 'piatto';
+  }) => {
     setSelectedPrenotazione(null);
     setInitialSlot(slot);
     setIsDrawerOpen(true);
@@ -604,6 +616,8 @@ export default function PrenotazioniView({
         initialDate={initialSlot.date}
         initialTime={initialSlot.time}
         initialStaffId={initialSlot.staffId}
+        initialSenzaOrario={initialSlot.senzaOrario}
+        initialItemType={initialSlot.itemType}
         professionisti={professionisti}
         professionistiServizi={professionistiServizi}
         clienti={clienti}

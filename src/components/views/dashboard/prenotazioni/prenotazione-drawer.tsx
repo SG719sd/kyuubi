@@ -34,6 +34,8 @@ interface Props {
   initialDate?: string;
   initialTime?: string;
   initialStaffId?: number | null;
+  initialSenzaOrario?: boolean;
+  initialItemType?: 'servizio' | 'prodotto' | 'piatto';
   professionisti: any[];
   professionistiServizi?: any[];
   clienti: any[];
@@ -61,6 +63,8 @@ export default function PrenotazioneDrawer({
   initialDate,
   initialTime,
   initialStaffId,
+  initialSenzaOrario = false,
+  initialItemType,
   professionisti,
   professionistiServizi = [],
   clienti,
@@ -83,6 +87,7 @@ export default function PrenotazioneDrawer({
   // Date and Time
   const [dateStr, setDateStr] = useState('');
   const [timeStr, setTimeStr] = useState('09:00');
+  const [senzaOrario, setSenzaOrario] = useState(false);
 
   // Selected items list
   const [items, setItems] = useState<ItemLine[]>([]);
@@ -145,8 +150,16 @@ export default function PrenotazioneDrawer({
           };
         });
         setItems(mappedItems);
+        const isOrderNoTime =
+          initialData.ordini ||
+          !initialData.tms_inizio ||
+          (initialData.items &&
+            initialData.items.length > 0 &&
+            initialData.items.every((it) => it.tipo === 'piatto' || it.tipo === 'prodotto'));
+        setSenzaOrario(Boolean(isOrderNoTime));
       } else {
         setItems([]);
+        setSenzaOrario(Boolean(initialData.ordini));
       }
     } else {
       // Create new: usa i parametri di inizializzazione se passati da click su slot
@@ -163,13 +176,17 @@ export default function PrenotazioneDrawer({
       setStato('pending');
       setDateStr(initialDate || new Date().toISOString().slice(0, 10));
       setTimeStr(initialTime || '09:00');
+      setSenzaOrario(Boolean(initialSenzaOrario));
+      if (initialItemType) {
+        setItemTypeToAdd(initialItemType);
+      }
       setItems([]);
     }
 
     setErrorMsg(null);
     setAvailableSlots([]);
     setSlotMessage(null);
-  }, [initialData, isOpen, initialDate, initialTime, initialStaffId, professionisti, servizi, prodotti, piatti]);
+  }, [initialData, isOpen, initialDate, initialTime, initialStaffId, initialSenzaOrario, initialItemType, professionisti, servizi, prodotti, piatti]);
 
   // Filtro Servizi dedicati per l'operatore selezionato
   const availableServizi = useMemo(() => {
@@ -355,23 +372,33 @@ export default function PrenotazioneDrawer({
       return;
     }
 
-    if (!dateStr || !timeStr) {
-      setErrorMsg('Seleziona data e ora di inizio');
+    if (!dateStr) {
+      setErrorMsg('Seleziona la data dell\'appuntamento o ordine');
+      return;
+    }
+
+    if (!senzaOrario && !timeStr) {
+      setErrorMsg('Seleziona l\'ora di inizio oppure attiva "Senza orario fisso"');
       return;
     }
 
     // Build ISO timestamp
-    const [h, m] = timeStr.split(':').map(Number);
-    const startObj = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+    let startISO: string;
+    if (senzaOrario) {
+      startISO = new Date(`${dateStr}T12:00:00.000Z`).toISOString();
+    } else {
+      const [h, m] = timeStr.split(':').map(Number);
+      startISO = new Date(`${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`).toISOString();
+    }
 
     // Customer name default for title if not typed
     let generatedTitle = titolo.trim();
     if (!generatedTitle) {
       if (selectedClienteId) {
         const cli = clienti.find((c) => c.id === selectedClienteId);
-        if (cli) generatedTitle = `Prenotazione: ${cli.nome} ${cli.cognome || ''}`.trim();
+        if (cli) generatedTitle = `${senzaOrario ? 'Ordine' : 'Prenotazione'}: ${cli.nome} ${cli.cognome || ''}`.trim();
       } else {
-        generatedTitle = `Prenotazione ${items[0].titolo}`;
+        generatedTitle = `${senzaOrario ? 'Ordine' : 'Prenotazione'} ${items[0].titolo}`;
       }
     }
 
@@ -384,8 +411,8 @@ export default function PrenotazioneDrawer({
       note: note.trim() || null,
       stato,
       agenda: true,
-      ordini: items.some((i) => i.tipo === 'prodotto' || i.tipo === 'piatto'),
-      tms_inizio: startObj.toISOString(),
+      ordini: senzaOrario || items.some((i) => i.tipo === 'prodotto' || i.tipo === 'piatto'),
+      tms_inizio: startISO,
       items: items.map((it) => ({
         id_item: it.id_item,
         tipo: it.tipo,
@@ -626,22 +653,37 @@ export default function PrenotazioneDrawer({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-indigo-500" />
-                  Pianificazione Oraria
+                  Pianificazione Data e Orario
                 </span>
-                <button
-                  type="button"
-                  onClick={handleCheckAvailableSlots}
-                  disabled={slotsLoading || !dateStr}
-                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
-                >
-                  {slotsLoading ? 'Calcolo slot in corso...' : 'Calcola Slot Disponibili'}
-                </button>
+                {!senzaOrario && (
+                  <button
+                    type="button"
+                    onClick={handleCheckAvailableSlots}
+                    disabled={slotsLoading || !dateStr}
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                  >
+                    {slotsLoading ? 'Calcolo slot in corso...' : 'Calcola Slot Disponibili'}
+                  </button>
+                )}
               </div>
+
+              {/* Toggle Senza Orario Fisso (Ideale per Piatti, Prodotti o Asporto) */}
+              <label className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={senzaOrario}
+                  onChange={(e) => setSenzaOrario(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  📦 Senza orario fisso (Ordine del giorno, Piatto o Prodotto)
+                </span>
+              </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    Data Appuntamento
+                    Data Riferimento
                   </label>
                   <input
                     type="date"
@@ -652,28 +694,38 @@ export default function PrenotazioneDrawer({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    Ora Inizio
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={timeStr}
-                    onChange={(e) => setTimeStr(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-medium"
-                  />
-                </div>
+                {!senzaOrario ? (
+                  <>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                        Ora Inizio
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={timeStr}
+                        onChange={(e) => setTimeStr(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-medium"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
-                    Fine Prevista (Calc.)
-                  </label>
-                  <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
-                    <span>{calculatedEndTime || '--:--'}</span>
-                    <span className="text-[10px] text-slate-400 font-normal">({totalMinutes} min)</span>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">
+                        Fine Prevista (Calc.)
+                      </label>
+                      <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
+                        <span>{calculatedEndTime || '--:--'}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">({totalMinutes} min)</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="sm:col-span-2 flex items-center p-2 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs">
+                    <span>
+                      Questo elemento apparirà nella barra <strong>Ordini & Prodotti del Giorno</strong> in cima all'agenda classica.
+                    </span>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Messaggio o Avviso Slot */}

@@ -30,6 +30,7 @@ export function HubLogoUploader({
 
   const [logoUrl, setLogoUrl] = useState<string | null>(currentLogoUrl);
   const [loading, setLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Genera il path coerente: {hubId}/logo/logo.webp
   const storageFilePath = getHubStoragePath.logo(hubId, 'logo.webp');
@@ -37,11 +38,12 @@ export function HubLogoUploader({
   // 1 & 2. CARICA, COMPRIMI E CONVERTI IN WEBP VIA SERVER ACTION
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    setUploadError(null);
     
     // Controllo permessi
     if (!file) return;
     if (!isAdmin) {
-      alert('Non hai i permessi necessari per modificare il logo di questo Hub.');
+      setUploadError('Non hai i permessi necessari per modificare il logo di questo Hub.');
       return;
     }
 
@@ -74,7 +76,7 @@ export function HubLogoUploader({
     } catch (err: unknown) {
       console.error('Errore durante il caricamento del logo:', err);
       const errorMessage = err instanceof Error ? err.message : 'Errore sconosciuto';
-      alert(`Impossibile caricare il logo: ${errorMessage}`);
+      setUploadError(errorMessage);
     } finally {
       setLoading(false);
       // Reset dell'input file
@@ -165,6 +167,22 @@ export function HubLogoUploader({
           </div>
         )}
       </div>
+
+      {uploadError && (
+        <div className="absolute top-full left-0 mt-2 z-50 w-72 p-3 bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-800 rounded-xl shadow-lg text-[11px] text-rose-800 dark:text-rose-200">
+          <div className="flex items-start justify-between gap-1 mb-1 font-bold">
+            <span>Errore caricamento logo</span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="text-rose-500 hover:text-rose-700 cursor-pointer text-xs"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="leading-snug">{uploadError}</p>
+        </div>
+      )}
     </div>
   );
 }
