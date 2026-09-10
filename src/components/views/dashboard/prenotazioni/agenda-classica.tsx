@@ -60,17 +60,6 @@ function getBookingLocalDate(tms?: string | Date | null): string {
   return `${y}-${m}-${day}`;
 }
 
-// Determina lo slot 30-min per una prenotazione (es. 09:15 -> "09:00", 09:45 -> "09:30")
-function getBookingTimeSlot(tms?: string | null): string | null {
-  if (!tms) return null;
-  const d = new Date(tms);
-  if (isNaN(d.getTime())) return null;
-  const hours = d.getHours();
-  const minutes = d.getMinutes();
-  const slotMin = minutes < 30 ? '00' : '30';
-  return `${String(hours).padStart(2, '0')}:${slotMin}`;
-}
-
 // Formatta l'orario reale per visualizzazione (es. "09:15")
 function getBookingDisplayTime(tms?: string | null): string {
   if (!tms) return '';
@@ -79,6 +68,94 @@ function getBookingDisplayTime(tms?: string | null): string {
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+// Converte stringa orario "HH:MM" in minuti totali dall'inizio della giornata (es. "09:30" -> 570)
+function timeToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+// Converte minuti totali in formato stringa "HH:MM" (es. 570 -> "09:30")
+function minutesToTime(totalMinutes: number): string {
+  const normalized = Math.max(0, totalMinutes);
+  const h = Math.floor(normalized / 60) % 24;
+  const m = normalized % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// Calcola la durata effettiva in minuti di una prenotazione
+function getBookingDurationMinutes(b: PrenotazioneWithDetails): number {
+  if (b.tempo_minuti && b.tempo_minuti > 0) return b.tempo_minuti;
+  if (b.tms_inizio && b.tms_fine) {
+    const diff = Math.round((new Date(b.tms_fine).getTime() - new Date(b.tms_inizio).getTime()) / 60000);
+    if (diff > 0) return diff;
+  }
+  if (b.items && b.items.length > 0) {
+    const sum = b.items.reduce((acc, it) => acc + (it.tempo_minuti || 0) * (it.quantita || 1), 0);
+    if (sum > 0) return sum;
+  }
+  return 30; // Minimo default 30 minuti
+}
+
+// Restituisce i dettagli dell'arco temporale di una prenotazione
+export interface BookingTimeSpan {
+  startMinutes: number;
+  endMinutes: number;
+  duration: number;
+  displayStart: string;
+  displayEnd: string;
+}
+
+function getBookingSpan(b: PrenotazioneWithDetails): BookingTimeSpan | null {
+  if (!b.tms_inizio) return null;
+  const d = new Date(b.tms_inizio);
+  if (isNaN(d.getTime())) return null;
+
+  const startMinutes = d.getHours() * 60 + d.getMinutes();
+  const duration = Math.max(getBookingDurationMinutes(b), 15);
+  const endMinutes = startMinutes + duration;
+  const displayStart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const displayEnd = minutesToTime(endMinutes);
+
+  return {
+    startMinutes,
+    endMinutes,
+    duration,
+    displayStart,
+    displayEnd,
+  };
+}
+
+// Converte un colore HEX in RGBA con trasparenza specifica
+function hexToRgba(hex?: string | null, alpha = 1): string {
+  if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) {
+    return `rgba(99, 102, 241, ${alpha})`;
+  }
+  let c = hex.substring(1);
+  if (c.length === 3) {
+    c = c.split('').map((x) => x + x).join('');
+  }
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return `rgba(99, 102, 241, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Risolve il colore associato al professionista (usando la colonna colore o l'elenco professionisti)
+function resolveStaffColor(
+  booking: PrenotazioneWithDetails,
+  professionistiList: any[] = []
+): string {
+  if (booking.professionisti?.colore) return booking.professionisti.colore;
+  if (booking.id_professionista) {
+    const found = professionistiList.find((p) => p.id === booking.id_professionista);
+    if (found?.colore) return found.colore;
+  }
+  return '#64748B'; // Default colore Hub / Non assegnato
 }
 
 // Risolve il nome dell'elemento da catalogo
@@ -667,9 +744,15 @@ export default function AgendaClassica({
 
                     {/* Footer con contatti rapidi */}
                     <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                      <span className="text-[10px] text-slate-400 truncate max-w-[130px]">
-                        {order.professionisti ? `Staff: ${order.professionisti.nome}` : 'Hub Generale'}
-                      </span>
+                      {(() => {
+                        const staffColor = resolveStaffColor(order, professionisti);
+                        return (
+                          <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[140px] flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: staffColor }} />
+                            <span className="truncate">{order.professionisti ? order.professionisti.nome : 'Hub Generale'}</span>
+                          </span>
+                        );
+                      })()}
                       {phone && (
                         <div className="flex items-center gap-1.5">
                           <button
@@ -719,20 +802,25 @@ export default function AgendaClassica({
 
           {professionisti.map((p) => {
             const isSelected = selectedStaffFilter === p.id;
+            const staffColor = p.colore || '#6366F1';
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => setSelectedStaffFilter(p.id)}
+                style={{
+                  backgroundColor: isSelected ? staffColor : undefined,
+                  borderColor: isSelected ? staffColor : undefined,
+                }}
                 className={`px-3 py-1.5 rounded-xl font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
                   isSelected
-                    ? 'bg-indigo-600 text-white shadow-xs'
+                    ? 'text-white shadow-xs'
                     : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
                 }`}
               >
                 <div
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: p.colore || '#6366F1' }}
+                  className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                  style={{ backgroundColor: isSelected ? '#FFFFFF' : staffColor }}
                 />
                 <span className="truncate">{p.nome}</span>
               </button>
@@ -745,8 +833,8 @@ export default function AgendaClassica({
               onClick={() => setSelectedStaffFilter('non_assegnato')}
               className={`px-3 py-1.5 rounded-xl font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
                 selectedStaffFilter === 'non_assegnato'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
+                  ? 'bg-slate-700 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-400'
               }`}
             >
               <span>🏢 Hub ({unassignedCount})</span>
@@ -774,25 +862,29 @@ export default function AgendaClassica({
                   <Clock className="w-3.5 h-3.5 mr-1" /> Ora
                 </div>
 
-                {columnsStaff.map((staff) => (
-                  <div
-                    key={staff.id ?? 'hub'}
-                    className="p-3 text-center border-r border-slate-200 dark:border-slate-800 last:border-r-0 flex items-center justify-center gap-2"
-                  >
+                {columnsStaff.map((staff) => {
+                  const staffColor = staff.colore || '#64748B';
+                  return (
                     <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: staff.colore || '#6366F1' }}
-                    />
-                    <div>
-                      <span className="text-xs font-black text-slate-800 dark:text-white block truncate">
-                        {staff.nome}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block truncate">
-                        {staff.ruolo || 'Operatore'}
-                      </span>
+                      key={staff.id ?? 'hub'}
+                      className="p-3 text-center border-r border-slate-200 dark:border-slate-800 last:border-r-0 flex items-center justify-center gap-2 relative"
+                      style={{ borderTop: `3px solid ${staffColor}` }}
+                    >
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0 shadow-2xs"
+                        style={{ backgroundColor: staffColor }}
+                      />
+                      <div>
+                        <span className="text-xs font-black text-slate-800 dark:text-white block truncate">
+                          {staff.nome}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          {staff.ruolo || 'Operatore'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Corpo Griglia Oraria */}
@@ -815,26 +907,46 @@ export default function AgendaClassica({
 
                     {/* Celle Operatori */}
                     {columnsStaff.map((staff) => {
-                      // Trova prenotazioni con orario che ricadono in questo slot
-                      const matchingBookings = prenotazioni.filter((p) => {
+                      const slotStart = timeToMinutes(time);
+                      const slotEnd = slotStart + 30;
+                      const staffColor = staff.colore || '#64748B';
+
+                      // Filtra prenotazioni del giorno corrente per questo operatore
+                      const relevantBookings = prenotazioni.filter((p) => {
                         if (!p.tms_inizio) return false;
-                        if (isDishOrProductOrUntimed(p)) return false; // già mostrate nella barra ordini in alto
+                        if (isDishOrProductOrUntimed(p)) return false;
 
                         const bDate = getBookingLocalDate(p.tms_inizio);
                         if (bDate !== currentDateStr) return false;
 
-                        // Verifica slot 30-min
-                        const slotKey = getBookingTimeSlot(p.tms_inizio);
-                        if (slotKey !== time) return false;
-
-                        // Verifica operatore
                         if (staff.id !== null) {
                           return p.id_professionista === staff.id;
                         } else {
-                          // Colonna Hub: include solo quelle senza operatore assegnato
                           return !p.id_professionista;
                         }
                       });
+
+                      // Calcola le prenotazioni che si sovrappongono a questo slot considerando la durata
+                      const slotBookings = relevantBookings
+                        .map((p) => {
+                          const span = getBookingSpan(p);
+                          if (!span) return null;
+                          const overlaps = span.startMinutes < slotEnd && span.endMinutes > slotStart;
+                          if (!overlaps) return null;
+                          const isStart =
+                            (span.startMinutes >= slotStart && span.startMinutes < slotEnd) ||
+                            (slotStart === timeToMinutes(TIME_SLOTS[0]) && span.startMinutes < slotStart);
+                          return {
+                            booking: p,
+                            span,
+                            isStart,
+                          };
+                        })
+                        .filter(Boolean) as Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan; isStart: boolean }>;
+
+                      const startingBookings = slotBookings.filter((s) => s.isStart);
+                      const continuingBookings = slotBookings.filter((s) => !s.isStart);
+                      const isOccupied = slotBookings.length > 0;
 
                       return (
                         <div
@@ -842,18 +954,18 @@ export default function AgendaClassica({
                           onDragOver={handleDragOver}
                           onDrop={() => handleDropSlot(currentDateStr, time, staff.id)}
                           onClick={() => {
-                            if (matchingBookings.length === 0) {
+                            if (!isOccupied) {
                               onSelectSlot({ date: currentDateStr, time, staffId: staff.id });
                             }
                           }}
                           className={`p-1.5 border-r border-slate-200/60 dark:border-slate-800/60 last:border-r-0 transition-colors relative group ${
-                            matchingBookings.length === 0
+                            !isOccupied
                               ? 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 cursor-pointer'
-                              : 'bg-slate-50/20 dark:bg-slate-950/10'
+                              : 'bg-slate-50/30 dark:bg-slate-950/15'
                           }`}
                         >
-                          {/* Pulsante veloce aggiungi quando vuoto */}
-                          {matchingBookings.length === 0 && (
+                          {/* Pulsante veloce aggiungi solo quando lo slot è libero */}
+                          {!isOccupied && (
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                               <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md shadow-xs">
                                 + {time}
@@ -863,15 +975,14 @@ export default function AgendaClassica({
 
                           {/* Prenotazioni per questo slot */}
                           <div className="space-y-1">
-                            {matchingBookings.map((b) => {
+                            {/* 1. Prenotazioni che INIZIANO in questo slot (Card completa) */}
+                            {startingBookings.map(({ booking: b, span }) => {
                               const isConfermata = b.stato === 'confermata';
                               const isCompletata = b.stato === 'completata';
                               const clientName = b.rubrica
                                 ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
                                 : 'Cliente Anonimo';
                               const phone = b.rubrica?.telefono;
-                              const displayTime = getBookingDisplayTime(b.tms_inizio);
-
                               const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
                               const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
 
@@ -884,18 +995,17 @@ export default function AgendaClassica({
                                     e.stopPropagation();
                                     onEditPrenotazione(b);
                                   }}
-                                  className={`p-2 rounded-xl text-left border shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
-                                    isCompletata
-                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-100'
-                                      : isConfermata
-                                      ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-100'
-                                      : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-100'
-                                  }`}
+                                  style={{
+                                    borderLeft: `4px solid ${staffColor}`,
+                                    backgroundColor: hexToRgba(staffColor, 0.08),
+                                  }}
+                                  className="p-2 rounded-xl text-left border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing relative"
                                 >
                                   <div className="flex items-center justify-between gap-1 mb-1">
-                                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1">
-                                      <Clock className="w-2.5 h-2.5 text-indigo-500" />
-                                      {displayTime} ({b.tempo_minuti || 30}m)
+                                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shadow-2xs">
+                                      <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: staffColor }} />
+                                      <span>{span.displayStart} - {span.displayEnd}</span>
+                                      <span className="text-[9px] opacity-70 font-semibold">({span.duration}m)</span>
                                     </span>
                                     <div className="flex items-center gap-1">
                                       {hasDishes && <span title="Contiene Piatti">🍕</span>}
@@ -904,39 +1014,89 @@ export default function AgendaClassica({
                                     </div>
                                   </div>
 
-                                  <div className="font-extrabold text-xs leading-tight truncate">
+                                  <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100">
                                     {b.titolo || clientName}
                                   </div>
-                                  <div className="text-[11px] opacity-80 truncate flex items-center gap-1 mt-0.5">
+                                  <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
                                     <User className="w-2.5 h-2.5 shrink-0" />
                                     <span>{clientName}</span>
                                   </div>
 
-                                  <div className="mt-1.5 pt-1.5 border-t border-slate-200/40 dark:border-slate-800/40 flex items-center justify-between">
-                                    <span className="text-[10px] font-bold">
+                                  <div className="mt-1.5 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">
                                       € {Number(b.totale || 0).toFixed(2)}
                                     </span>
 
-                                    {phone && (
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={(e) => callPhone(e, phone)}
-                                          className="p-1 hover:bg-white/80 dark:hover:bg-slate-900 rounded text-slate-700 dark:text-slate-200 cursor-pointer"
-                                          title="Chiama al telefono"
-                                        >
-                                          <Phone className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={(e) => openWhatsApp(e, b)}
-                                          className="p-1 hover:bg-white/80 dark:hover:bg-slate-900 rounded text-emerald-600 dark:text-emerald-400 cursor-pointer"
-                                          title="Invia promemoria WhatsApp"
-                                        >
-                                          <MessageCircle className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    )}
+                                    <div className="flex items-center gap-1.5">
+                                      <span
+                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                          isCompletata
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                            : isConfermata
+                                            ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
+                                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                        }`}
+                                      >
+                                        {isCompletata ? 'Completata' : isConfermata ? 'Confermata' : 'Attesa'}
+                                      </span>
+
+                                      {phone && (
+                                        <div className="flex items-center gap-0.5">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => callPhone(e, phone)}
+                                            className="p-1 hover:bg-white/80 dark:hover:bg-slate-900 rounded text-slate-700 dark:text-slate-200 cursor-pointer"
+                                            title="Chiama al telefono"
+                                          >
+                                            <Phone className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => openWhatsApp(e, b)}
+                                            className="p-1 hover:bg-white/80 dark:hover:bg-slate-900 rounded text-emerald-600 dark:text-emerald-400 cursor-pointer"
+                                            title="Invia promemoria WhatsApp"
+                                          >
+                                            <MessageCircle className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* 2. Prenotazioni in CORSO (Slot bloccati per durata) */}
+                            {continuingBookings.map(({ booking: b, span }) => {
+                              const clientName = b.rubrica
+                                ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
+                                : 'Cliente Anonimo';
+
+                              return (
+                                <div
+                                  key={`cont-${b.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEditPrenotazione(b);
+                                  }}
+                                  title={`In corso: ${b.titolo || clientName} (Fino alle ${span.displayEnd} - durata totale ${span.duration}m). Clicca per visualizzare o modificare.`}
+                                  style={{
+                                    borderLeft: `4px solid ${staffColor}`,
+                                    backgroundColor: hexToRgba(staffColor, 0.07),
+                                  }}
+                                  className="p-1.5 rounded-lg border-y border-r border-dashed border-slate-200/90 dark:border-slate-800/90 text-left shadow-2xs hover:brightness-95 transition-all cursor-pointer"
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: staffColor }}>
+                                      <Clock className="w-2.5 h-2.5 shrink-0" />
+                                      <span>↳ In corso fino alle {span.displayEnd}</span>
+                                    </div>
+                                    <span className="text-[9px] opacity-60 text-slate-500 font-mono hidden sm:inline">
+                                      {span.duration}m
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">
+                                    {b.titolo || clientName}
                                   </div>
                                 </div>
                               );
@@ -1065,17 +1225,16 @@ export default function AgendaClassica({
                     {/* Ciascuno dei 7 giorni */}
                     {weekDays.map((day) => {
                       const dayStr = getBookingLocalDate(day);
+                      const slotStart = timeToMinutes(time);
+                      const slotEnd = slotStart + 30;
 
-                      // Trova prenotazioni con orario che ricadono in questo slot in questo giorno
-                      const matchingBookings = prenotazioni.filter((p) => {
+                      // Filtra prenotazioni del giorno 'dayStr' in base a selectedStaffFilter
+                      const relevantBookings = prenotazioni.filter((p) => {
                         if (!p.tms_inizio) return false;
                         if (isDishOrProductOrUntimed(p)) return false;
 
                         const bDate = getBookingLocalDate(p.tms_inizio);
                         if (bDate !== dayStr) return false;
-
-                        const slotKey = getBookingTimeSlot(p.tms_inizio);
-                        if (slotKey !== time) return false;
 
                         if (selectedStaffFilter === 'non_assegnato') {
                           return !p.id_professionista;
@@ -1087,6 +1246,28 @@ export default function AgendaClassica({
 
                         return true;
                       });
+
+                      // Calcola le prenotazioni che si sovrappongono a questo slot considerando la durata
+                      const slotBookings = relevantBookings
+                        .map((p) => {
+                          const span = getBookingSpan(p);
+                          if (!span) return null;
+                          const overlaps = span.startMinutes < slotEnd && span.endMinutes > slotStart;
+                          if (!overlaps) return null;
+                          const isStart =
+                            (span.startMinutes >= slotStart && span.startMinutes < slotEnd) ||
+                            (slotStart === timeToMinutes(TIME_SLOTS[0]) && span.startMinutes < slotStart);
+                          return {
+                            booking: p,
+                            span,
+                            isStart,
+                          };
+                        })
+                        .filter(Boolean) as Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan; isStart: boolean }>;
+
+                      const startingBookings = slotBookings.filter((s) => s.isStart);
+                      const continuingBookings = slotBookings.filter((s) => !s.isStart);
+                      const isOccupied = slotBookings.length > 0;
 
                       return (
                         <div
@@ -1100,7 +1281,7 @@ export default function AgendaClassica({
                             )
                           }
                           onClick={() => {
-                            if (matchingBookings.length === 0) {
+                            if (!isOccupied) {
                               onSelectSlot({
                                 date: dayStr,
                                 time,
@@ -1112,13 +1293,13 @@ export default function AgendaClassica({
                             }
                           }}
                           className={`p-1.5 border-r border-slate-200/60 dark:border-slate-800/60 last:border-r-0 transition-colors relative group ${
-                            matchingBookings.length === 0
+                            !isOccupied
                               ? 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 cursor-pointer'
-                              : 'bg-slate-50/20 dark:bg-slate-950/10'
+                              : 'bg-slate-50/30 dark:bg-slate-950/15'
                           }`}
                         >
-                          {/* Pulsante veloce aggiungi quando vuoto */}
-                          {matchingBookings.length === 0 && (
+                          {/* Pulsante veloce aggiungi quando libero */}
+                          {!isOccupied && (
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                               <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md shadow-xs">
                                 + {time}
@@ -1128,14 +1309,18 @@ export default function AgendaClassica({
 
                           {/* Prenotazioni per questo slot */}
                           <div className="space-y-1">
-                            {matchingBookings.map((b) => {
-                              const isConfermata = b.stato === 'confermata';
-                              const isCompletata = b.stato === 'completata';
+                            {/* 1. Prenotazioni che INIZIANO in questo slot */}
+                            {startingBookings.map(({ booking: b, span }) => {
+                              const staffColor = resolveStaffColor(b, professionisti);
+                              const staffName =
+                                b.professionisti?.nome ||
+                                (b.id_professionista
+                                  ? professionisti.find((p) => p.id === b.id_professionista)?.nome
+                                  : 'Hub');
                               const clientName = b.rubrica
                                 ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
                                 : 'Cliente';
                               const phone = b.rubrica?.telefono;
-                              const displayTime = getBookingDisplayTime(b.tms_inizio);
                               const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
                               const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
 
@@ -1148,52 +1333,116 @@ export default function AgendaClassica({
                                     e.stopPropagation();
                                     onEditPrenotazione(b);
                                   }}
-                                  className={`p-1.5 rounded-xl text-left border shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
-                                    isCompletata
-                                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-100'
-                                      : isConfermata
-                                      ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-100'
-                                      : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-100'
-                                  }`}
+                                  style={{
+                                    borderLeft: `4px solid ${staffColor}`,
+                                    backgroundColor: hexToRgba(staffColor, 0.08),
+                                  }}
+                                  className="p-1.5 rounded-xl text-left border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing relative"
                                 >
                                   <div className="flex items-center justify-between text-[10px] font-black mb-0.5">
                                     <span className="flex items-center gap-1">
-                                      <Clock className="w-2.5 h-2.5 text-indigo-500" />
-                                      {displayTime}
+                                      <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: staffColor }} />
+                                      <span>{span.displayStart} - {span.displayEnd}</span>
                                     </span>
                                     <div className="flex items-center gap-1">
                                       {hasDishes && <span title="Piatto">🍕</span>}
                                       {hasProducts && <span title="Prodotto">🛍️</span>}
-                                      <span className="text-[9px] opacity-70">
-                                        {b.tempo_minuti || 30}m
+                                      <span className="text-[9px] opacity-70 font-semibold">
+                                        {span.duration}m
                                       </span>
                                     </div>
                                   </div>
 
-                                  <div className="font-extrabold text-[11px] leading-tight truncate">
+                                  {/* Badge Staff (nella vista settimanale con tutti gli operatori) */}
+                                  {selectedStaffFilter === 'tutti' && staffName && (
+                                    <div className="mb-1">
+                                      <span
+                                        className="text-[9px] font-bold px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 max-w-full"
+                                        style={{
+                                          backgroundColor: hexToRgba(staffColor, 0.18),
+                                          color: staffColor,
+                                        }}
+                                      >
+                                        <span
+                                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                                          style={{ backgroundColor: staffColor }}
+                                        />
+                                        <span className="truncate">{staffName}</span>
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100">
                                     {b.titolo || clientName}
                                   </div>
 
-                                  <div className="text-[10px] opacity-75 truncate flex items-center justify-between mt-1">
+                                  <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate flex items-center justify-between mt-1">
                                     <span className="truncate">{clientName}</span>
                                     {phone && (
                                       <div className="flex items-center gap-0.5 ml-1">
                                         <button
                                           type="button"
                                           onClick={(e) => callPhone(e, phone)}
-                                          className="p-0.5 hover:bg-white/80 rounded cursor-pointer"
+                                          className="p-0.5 hover:bg-white/80 dark:hover:bg-slate-900 rounded cursor-pointer"
+                                          title="Chiama al telefono"
                                         >
-                                          <Phone className="w-2.5 h-2.5 text-indigo-600" />
+                                          <Phone className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
                                         </button>
                                         <button
                                           type="button"
                                           onClick={(e) => openWhatsApp(e, b)}
-                                          className="p-0.5 hover:bg-white/80 rounded cursor-pointer"
+                                          className="p-0.5 hover:bg-white/80 dark:hover:bg-slate-900 rounded cursor-pointer"
+                                          title="Invia promemoria WhatsApp"
                                         >
-                                          <MessageCircle className="w-2.5 h-2.5 text-emerald-600" />
+                                          <MessageCircle className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
                                         </button>
                                       </div>
                                     )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* 2. Prenotazioni in CORSO (Slot bloccati per durata) */}
+                            {continuingBookings.map(({ booking: b, span }) => {
+                              const staffColor = resolveStaffColor(b, professionisti);
+                              const staffName =
+                                b.professionisti?.nome ||
+                                (b.id_professionista
+                                  ? professionisti.find((p) => p.id === b.id_professionista)?.nome
+                                  : 'Hub');
+                              const clientName = b.rubrica
+                                ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
+                                : 'Cliente';
+
+                              return (
+                                <div
+                                  key={`cont-${b.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEditPrenotazione(b);
+                                  }}
+                                  title={`In corso: ${b.titolo || clientName} (${staffName}) fino alle ${span.displayEnd}. Clicca per visualizzare o modificare.`}
+                                  style={{
+                                    borderLeft: `4px solid ${staffColor}`,
+                                    backgroundColor: hexToRgba(staffColor, 0.07),
+                                  }}
+                                  className="p-1.5 rounded-lg border-y border-r border-dashed border-slate-200/90 dark:border-slate-800/90 text-left shadow-2xs hover:brightness-95 transition-all cursor-pointer"
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div
+                                      className="flex items-center gap-1 text-[9px] font-bold truncate"
+                                      style={{ color: staffColor }}
+                                    >
+                                      <Clock className="w-2.5 h-2.5 shrink-0" />
+                                      <span className="truncate">↳ {staffName}: {span.displayEnd}</span>
+                                    </div>
+                                    <span className="text-[9px] opacity-60 text-slate-500 font-mono shrink-0">
+                                      {span.duration}m
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">
+                                    {b.titolo || clientName}
                                   </div>
                                 </div>
                               );

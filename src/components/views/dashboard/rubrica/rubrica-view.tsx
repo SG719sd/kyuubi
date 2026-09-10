@@ -134,7 +134,7 @@ export default function RubricaView({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredContatti.map((contatto) => (
+          {paginatedContatti.map((contatto) => (
             <div
               key={contatto.id}
               className="group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 relative overflow-hidden"
@@ -222,6 +222,63 @@ export default function RubricaView({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Barra di Paginazione */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 px-5 py-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+          <div className="text-xs text-slate-500 font-medium">
+            Visualizzati <span className="font-bold text-slate-900 dark:text-white">{startIndex + 1}</span> -{' '}
+            <span className="font-bold text-slate-900 dark:text-white">{endIndex}</span> di{' '}
+            <span className="font-bold text-slate-900 dark:text-white">{totalItems}</span> contatti
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Pagina precedente"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-1">
+              {getPageNumbers().map((pageNum, idx) => {
+                if (pageNum === '...') {
+                  return (
+                    <span key={`dots-${idx}`} className="px-2 text-xs text-slate-400">
+                      ...
+                    </span>
+                  );
+                }
+                const isActive = pageNum === safePage;
+                return (
+                  <button
+                    key={`page-${pageNum}`}
+                    onClick={() => setCurrentPage(Number(pageNum))}
+                    className={`min-w-[32px] h-8 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Pagina successiva"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

@@ -13,6 +13,7 @@ export interface PrenotazioneWithDetails extends PrenotazioneRow {
     id: number;
     nome: string;
     ruolo: string;
+    colore?: string | null;
     img_url?: string | null;
   } | null;
   rubrica?: {
@@ -45,7 +46,7 @@ export class PrenotazioniRepository {
       .select(`
         *,
         items:prenotazioni_items(*),
-        professionisti(id, nome, ruolo, img_url),
+        professionisti(id, nome, ruolo, colore, img_url),
         rubrica(id, id_user, nome, cognome, telefono, email)
       `)
       .eq('id_hub', hubId)
@@ -81,7 +82,7 @@ export class PrenotazioniRepository {
       .select(`
         *,
         items:prenotazioni_items(*),
-        professionisti(id, nome, ruolo, img_url),
+        professionisti(id, nome, ruolo, colore, img_url),
         rubrica(id, id_user, nome, cognome, telefono, email)
       `)
       .eq('id', id)
