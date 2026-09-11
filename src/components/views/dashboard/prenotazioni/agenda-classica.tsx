@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft,
@@ -99,6 +99,13 @@ function getBookingDurationMinutes(b: PrenotazioneWithDetails): number {
   return 30; // Minimo default 30 minuti
 }
 
+// Costanti di rendering griglia oraria continua
+export const TIME_SLOT_MINUTES = 30;
+export const SLOT_HEIGHT = 60; // 60px per slot da 30 min -> 2.0px per minuto esatto
+export const PIXELS_PER_MINUTE = SLOT_HEIGHT / TIME_SLOT_MINUTES; // 2.0
+export const DAY_START_MINUTES = 7 * 60; // 07:00 (420 min)
+export const DAY_END_MINUTES = 22 * 60 + 30; // 22:30 (1350 min)
+
 // Restituisce i dettagli dell'arco temporale di una prenotazione
 export interface BookingTimeSpan {
   startMinutes: number;
@@ -106,6 +113,105 @@ export interface BookingTimeSpan {
   duration: number;
   displayStart: string;
   displayEnd: string;
+}
+
+// Struttura posizionata sulla griglia continua
+export interface PositionedBooking {
+  booking: PrenotazioneWithDetails;
+  span: BookingTimeSpan;
+  lane: number;
+  totalLanes: number;
+  top: number;
+  height: number;
+}
+
+// Algoritmo avanzato di partizionamento corsie per sovrapposizioni orarie
+export function layoutBookingsInLanes(
+  items: Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan }>
+): PositionedBooking[] {
+  if (!items || items.length === 0) return [];
+
+  // 1. Ordina per inizio crescente, poi per durata decrescente
+  const sorted = [...items].sort((a, b) => {
+    if (a.span.startMinutes !== b.span.startMinutes) {
+      return a.span.startMinutes - b.span.startMinutes;
+    }
+    return b.span.endMinutes - a.span.endMinutes;
+  });
+
+  // 2. Raggruppa in componenti connesse (cluster di eventi sovrapposti)
+  const clusters: Array<typeof items> = [];
+  let currentCluster: typeof items = [];
+  let clusterEnd = -1;
+
+  for (const item of sorted) {
+    if (currentCluster.length === 0) {
+      currentCluster.push(item);
+      clusterEnd = item.span.endMinutes;
+    } else if (item.span.startMinutes < clusterEnd) {
+      currentCluster.push(item);
+      clusterEnd = Math.max(clusterEnd, item.span.endMinutes);
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [item];
+      clusterEnd = item.span.endMinutes;
+    }
+  }
+  if (currentCluster.length > 0) {
+    clusters.push(currentCluster);
+  }
+
+  // 3. Per ciascun cluster assegna le corsie orizzontali senza collisioni
+  const results: PositionedBooking[] = [];
+
+  for (const cluster of clusters) {
+    const lanes: number[] = [];
+    const clusterItemsWithLane: Array<{
+      booking: PrenotazioneWithDetails;
+      span: BookingTimeSpan;
+      lane: number;
+    }> = [];
+
+    for (const item of cluster) {
+      let assignedLane = -1;
+      for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i] <= item.span.startMinutes) {
+          assignedLane = i;
+          lanes[i] = item.span.endMinutes;
+          break;
+        }
+      }
+      if (assignedLane === -1) {
+        assignedLane = lanes.length;
+        lanes.push(item.span.endMinutes);
+      }
+      clusterItemsWithLane.push({ ...item, lane: assignedLane });
+    }
+
+    const totalLanes = Math.max(lanes.length, 1);
+
+    for (const it of clusterItemsWithLane) {
+      const clampedStart = Math.max(it.span.startMinutes, DAY_START_MINUTES);
+      const clampedEnd = Math.min(it.span.endMinutes, DAY_END_MINUTES);
+
+      if (clampedEnd > DAY_START_MINUTES && clampedStart < DAY_END_MINUTES) {
+        const top = (clampedStart - DAY_START_MINUTES) * PIXELS_PER_MINUTE;
+        const durationMinutes = clampedEnd - clampedStart;
+        const height = Math.max(durationMinutes * PIXELS_PER_MINUTE, 26);
+
+        results.push({
+          booking: it.booking,
+          span: it.span,
+          lane: it.lane,
+          totalLanes,
+          top,
+          height,
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 function getBookingSpan(b: PrenotazioneWithDetails): BookingTimeSpan | null {
@@ -234,6 +340,22 @@ export default function AgendaClassica({
 
   // Drag state
   const [draggedBooking, setDraggedBooking] = useState<PrenotazioneWithDetails | null>(null);
+
+  // Orario corrente per linea guida realtime
+  const [nowMinutes, setNowMinutes] = useState<number>(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const d = new Date();
+      setNowMinutes(d.getHours() * 60 + d.getMinutes());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const todayStr = useMemo(() => getBookingLocalDate(new Date()), []);
 
   // Helper navigazione
   const handlePrev = () => {
@@ -887,144 +1009,248 @@ export default function AgendaClassica({
                 })}
               </div>
 
-              {/* Corpo Griglia Oraria */}
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                {TIME_SLOTS.map((time) => (
-                  <div
-                    key={time}
-                    className="grid min-h-[56px]"
-                    style={{
-                      gridTemplateColumns:
-                        columnsStaff.length === 1
-                          ? '70px 1fr'
-                          : `75px repeat(${columnsStaff.length}, minmax(170px, 1fr))`,
-                    }}
-                  >
-                    {/* Indicatore Orario Sticky */}
-                    <div className="p-2 border-r border-slate-200/80 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs select-none sticky left-0 z-20 shadow-xs">
+              {/* Corpo Griglia Oraria Continua */}
+              <div
+                className="grid relative"
+                style={{
+                  gridTemplateColumns:
+                    columnsStaff.length === 1
+                      ? '70px 1fr'
+                      : `75px repeat(${columnsStaff.length}, minmax(170px, 1fr))`,
+                  height: `${TIME_SLOTS.length * SLOT_HEIGHT}px`,
+                }}
+              >
+                {/* Colonna Orari Sticky a Sinistra */}
+                <div className="border-r border-slate-200/80 dark:border-slate-800 sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs select-none">
+                  {TIME_SLOTS.map((time) => (
+                    <div
+                      key={time}
+                      style={{ height: `${SLOT_HEIGHT}px` }}
+                      className="p-1.5 border-b border-slate-100 dark:border-slate-800/80 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-start justify-center pt-1.5 shadow-2xs"
+                    >
                       {time}
                     </div>
+                  ))}
+                </div>
 
-                    {/* Celle Operatori */}
-                    {columnsStaff.map((staff) => {
-                      const slotStart = timeToMinutes(time);
-                      const slotEnd = slotStart + 30;
-                      const staffColor = staff.colore || '#64748B';
+                {/* Colonne Operatori */}
+                {columnsStaff.map((staff) => {
+                  const staffColor = staff.colore || '#64748B';
 
-                      // Filtra prenotazioni del giorno corrente per questo operatore
-                      const relevantBookings = prenotazioni.filter((p) => {
-                        if (!p.tms_inizio) return false;
-                        if (isDishOrProductOrUntimed(p)) return false;
+                  // Filtra prenotazioni del giorno corrente per questo operatore
+                  const relevantBookings = prenotazioni.filter((p) => {
+                    if (!p.tms_inizio) return false;
+                    if (isDishOrProductOrUntimed(p)) return false;
 
-                        const bDate = getBookingLocalDate(p.tms_inizio);
-                        if (bDate !== currentDateStr) return false;
+                    const bDate = getBookingLocalDate(p.tms_inizio);
+                    if (bDate !== currentDateStr) return false;
 
-                        if (staff.id !== null) {
-                          return p.id_professionista === staff.id;
-                        } else {
-                          return !p.id_professionista;
-                        }
-                      });
+                    if (staff.id !== null) {
+                      return p.id_professionista === staff.id;
+                    } else {
+                      return !p.id_professionista;
+                    }
+                  });
 
-                      // Calcola le prenotazioni che si sovrappongono a questo slot considerando la durata
-                      const slotBookings = relevantBookings
-                        .map((p) => {
-                          const span = getBookingSpan(p);
-                          if (!span) return null;
-                          const overlaps = span.startMinutes < slotEnd && span.endMinutes > slotStart;
-                          if (!overlaps) return null;
-                          const isStart =
-                            (span.startMinutes >= slotStart && span.startMinutes < slotEnd) ||
-                            (slotStart === timeToMinutes(TIME_SLOTS[0]) && span.startMinutes < slotStart);
-                          return {
-                            booking: p,
-                            span,
-                            isStart,
-                          };
-                        })
-                        .filter(Boolean) as Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan; isStart: boolean }>;
+                  // Calcola le prenotazioni con span e posizionamento corsie
+                  const items = relevantBookings
+                    .map((p) => {
+                      const span = getBookingSpan(p);
+                      if (!span) return null;
+                      return { booking: p, span };
+                    })
+                    .filter(Boolean) as Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan }>;
 
-                      const startingBookings = slotBookings.filter((s) => s.isStart);
-                      const continuingBookings = slotBookings.filter((s) => !s.isStart);
-                      const isOccupied = slotBookings.length > 0;
+                  const positioned = layoutBookingsInLanes(items);
+                  const isCurrentDayToday = currentDateStr === todayStr;
 
-                      return (
-                        <div
-                          key={`${time}-${staff.id ?? 'hub'}`}
-                          onDragOver={handleDragOver}
-                          onDrop={() => handleDropSlot(currentDateStr, time, staff.id)}
-                          onClick={() => {
-                            if (!isOccupied) {
-                              onSelectSlot({ date: currentDateStr, time, staffId: staff.id });
-                            }
-                          }}
-                          className={`p-1.5 border-r border-slate-200/60 dark:border-slate-800/60 last:border-r-0 transition-colors relative group ${
-                            !isOccupied
-                              ? 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 cursor-pointer'
-                              : 'bg-slate-50/30 dark:bg-slate-950/15'
-                          }`}
-                        >
-                          {/* Pulsante veloce aggiungi solo quando lo slot è libero */}
-                          {!isOccupied && (
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md shadow-xs">
-                                + {time}
-                              </span>
+                  return (
+                    <div
+                      key={staff.id ?? 'hub'}
+                      className="border-r border-slate-200/60 dark:border-slate-800/60 last:border-r-0 relative select-none"
+                      style={{ height: `${TIME_SLOTS.length * SLOT_HEIGHT}px` }}
+                    >
+                      {/* Layer 1: Slot di background da 30 minuti con guida a 15 minuti */}
+                      <div className="absolute inset-0 flex flex-col pointer-events-auto">
+                        {TIME_SLOTS.map((time) => {
+                          return (
+                            <div
+                              key={time}
+                              style={{ height: `${SLOT_HEIGHT}px` }}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const offsetY = e.clientY - rect.top;
+                                let targetTime = time;
+                                if (offsetY >= 30) {
+                                  targetTime = minutesToTime(timeToMinutes(time) + 15);
+                                }
+                                handleDropSlot(currentDateStr, targetTime, staff.id);
+                              }}
+                              onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const offsetY = e.clientY - rect.top;
+                                let clickedTime = time;
+                                if (offsetY >= 30) {
+                                  clickedTime = minutesToTime(timeToMinutes(time) + 15);
+                                }
+                                onSelectSlot({ date: currentDateStr, time: clickedTime, staffId: staff.id });
+                              }}
+                              className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/15 cursor-pointer relative group transition-colors"
+                            >
+                              {/* Linea tratteggiata per il quarto d'ora (15 minuti) a metà slot */}
+                              <div className="absolute left-0 right-0 top-1/2 border-b border-dashed border-slate-200/50 dark:border-slate-800/40 pointer-events-none" />
+
+                              {/* Prompt di aggiunta al passaggio del mouse */}
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-0">
+                                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md shadow-xs">
+                                  + {time}
+                                </span>
+                              </div>
                             </div>
-                          )}
+                          );
+                        })}
+                      </div>
 
-                          {/* Prenotazioni per questo slot */}
-                          <div className="space-y-1">
-                            {/* 1. Prenotazioni che INIZIANO in questo slot (Card completa) */}
-                            {startingBookings.map(({ booking: b, span }) => {
-                              const isConfermata = b.stato === 'confermata';
-                              const isCompletata = b.stato === 'completata';
-                              const clientName = b.rubrica
-                                ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
-                                : 'Cliente Anonimo';
-                              const phone = b.rubrica?.telefono;
-                              const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
-                              const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
+                      {/* Layer 2: Indicatore linea rossa orario corrente (se oggi) */}
+                      {isCurrentDayToday && nowMinutes >= DAY_START_MINUTES && nowMinutes <= DAY_END_MINUTES && (
+                        <div
+                          className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
+                          style={{
+                            top: `${(nowMinutes - DAY_START_MINUTES) * PIXELS_PER_MINUTE}px`,
+                          }}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs -ml-1.5 ring-2 ring-white dark:ring-slate-900" />
+                          <div className="h-[2px] w-full bg-rose-500/85 shadow-xs" />
+                        </div>
+                      )}
 
-                              return (
-                                <div
-                                  key={b.id}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, b)}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditPrenotazione(b);
-                                  }}
-                                  style={{
-                                    borderLeft: `4px solid ${staffColor}`,
-                                    backgroundColor: hexToRgba(staffColor, 0.08),
-                                  }}
-                                  className="p-2 rounded-xl text-left border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing relative"
-                                >
-                                  <div className="flex items-center justify-between gap-1 mb-1">
+                      {/* Layer 3: Prenotazioni continue (TUTTA LA SLOT UNICA SENZA DUPLICAZIONI) */}
+                      <div className="absolute inset-0 pointer-events-none z-10">
+                        {positioned.map(({ booking: b, span, lane, totalLanes, top, height }) => {
+                          const isConfermata = b.stato === 'confermata';
+                          const isCompletata = b.stato === 'completata';
+                          const clientName = b.rubrica
+                            ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
+                            : 'Cliente Anonimo';
+                          const phone = b.rubrica?.telefono;
+                          const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
+                          const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
+
+                          const leftPercent = (lane / totalLanes) * 100;
+                          const widthPercent = 100 / totalLanes;
+
+                          const isQuarterHour = height <= 38;
+                          const isHalfHour = height > 38 && height <= 68;
+
+                          return (
+                            <div
+                              key={b.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, b)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditPrenotazione(b);
+                              }}
+                              title={`${b.titolo || clientName} (${span.displayStart} - ${span.displayEnd}, ${span.duration}m). Clicca per modificare o trascina per spostare.`}
+                              style={{
+                                top: `${top + 1}px`,
+                                height: `${height - 2}px`,
+                                left: `calc(${leftPercent}% + 2px)`,
+                                width: `calc(${widthPercent}% - 4px)`,
+                                borderLeft: `4px solid ${staffColor}`,
+                                backgroundColor: hexToRgba(staffColor, 0.12),
+                              }}
+                              className="absolute rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs hover:shadow-md hover:z-30 transition-all cursor-grab active:cursor-grabbing pointer-events-auto overflow-hidden text-left"
+                            >
+                              {/* 1. LAYOUT COMPATTO: 15 MINUTI (Occupa solo il suo quarto d'ora, lasciando il resto libero) */}
+                              {isQuarterHour ? (
+                                <div className="h-full px-2 py-0.5 flex items-center justify-between gap-1 text-[10px] font-bold overflow-hidden">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="font-black font-mono px-1 py-0.5 rounded bg-white/90 dark:bg-slate-900/90 border border-slate-200/60 dark:border-slate-700/60 text-[9px] shrink-0">
+                                      {span.displayStart} - {span.displayEnd}
+                                    </span>
+                                    <span className="truncate text-slate-900 dark:text-slate-100 font-extrabold">
+                                      {b.titolo || clientName}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0 text-[9px] font-mono opacity-80">
+                                    <span>{span.duration}m</span>
+                                    <span
+                                      className={`w-2 h-2 rounded-full ${
+                                        isCompletata
+                                          ? 'bg-emerald-500'
+                                          : isConfermata
+                                          ? 'bg-indigo-500'
+                                          : 'bg-amber-500'
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
+                              ) : isHalfHour ? (
+                                /* 2. LAYOUT MEDIO: 30 MINUTI */
+                                <div className="h-full p-1.5 flex flex-col justify-between overflow-hidden">
+                                  <div className="flex items-center justify-between gap-1">
                                     <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shadow-2xs">
                                       <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: staffColor }} />
                                       <span>{span.displayStart} - {span.displayEnd}</span>
-                                      <span className="text-[9px] opacity-70 font-semibold">({span.duration}m)</span>
+                                      <span className="text-[9px] opacity-70 font-semibold font-mono">({span.duration}m)</span>
                                     </span>
                                     <div className="flex items-center gap-1">
                                       {hasDishes && <span title="Contiene Piatti">🍕</span>}
                                       {hasProducts && <span title="Contiene Prodotti">🛍️</span>}
-                                      <Move className="w-3 h-3 opacity-40 hover:opacity-100 cursor-grab" />
+                                      <span
+                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                          isCompletata
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                            : isConfermata
+                                            ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
+                                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                        }`}
+                                      >
+                                        {isCompletata ? 'Completata' : isConfermata ? 'Confermata' : 'Attesa'}
+                                      </span>
                                     </div>
                                   </div>
 
-                                  <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100">
-                                    {b.titolo || clientName}
+                                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                                    <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100">
+                                      {b.titolo || clientName}
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 shrink-0 font-mono">
+                                      €{Number(b.totale || 0).toFixed(0)}
+                                    </span>
                                   </div>
-                                  <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                                    <User className="w-2.5 h-2.5 shrink-0" />
-                                    <span>{clientName}</span>
+                                </div>
+                              ) : (
+                                /* 3. LAYOUT COMPLETO: 45+ MINUTI (Slot unica estesa fino alla fine) */
+                                <div className="h-full p-2 flex flex-col justify-between overflow-hidden">
+                                  <div>
+                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shadow-2xs">
+                                        <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: staffColor }} />
+                                        <span>{span.displayStart} - {span.displayEnd}</span>
+                                        <span className="text-[9px] opacity-70 font-semibold font-mono">({span.duration}m)</span>
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        {hasDishes && <span title="Contiene Piatti">🍕</span>}
+                                        {hasProducts && <span title="Contiene Prodotti">🛍️</span>}
+                                        <Move className="w-3 h-3 opacity-40 hover:opacity-100 cursor-grab" />
+                                      </div>
+                                    </div>
+
+                                    <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100">
+                                      {b.titolo || clientName}
+                                    </div>
+                                    <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                      <User className="w-2.5 h-2.5 shrink-0" />
+                                      <span>{clientName}</span>
+                                    </div>
                                   </div>
 
                                   <div className="mt-1.5 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between">
-                                    <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">
-                                      € {Number(b.totale || 0).toFixed(2)}
+                                    <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 font-mono">
+                                      €{Number(b.totale || 0).toFixed(2)}
                                     </span>
 
                                     <div className="flex items-center gap-1.5">
@@ -1063,50 +1289,14 @@ export default function AgendaClassica({
                                     </div>
                                   </div>
                                 </div>
-                              );
-                            })}
-
-                            {/* 2. Prenotazioni in CORSO (Slot bloccati per durata) */}
-                            {continuingBookings.map(({ booking: b, span }) => {
-                              const clientName = b.rubrica
-                                ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
-                                : 'Cliente Anonimo';
-
-                              return (
-                                <div
-                                  key={`cont-${b.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditPrenotazione(b);
-                                  }}
-                                  title={`In corso: ${b.titolo || clientName} (Fino alle ${span.displayEnd} - durata totale ${span.duration}m). Clicca per visualizzare o modificare.`}
-                                  style={{
-                                    borderLeft: `4px solid ${staffColor}`,
-                                    backgroundColor: hexToRgba(staffColor, 0.07),
-                                  }}
-                                  className="p-1.5 rounded-lg border-y border-r border-dashed border-slate-200/90 dark:border-slate-800/90 text-left shadow-2xs hover:brightness-95 transition-all cursor-pointer"
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: staffColor }}>
-                                      <Clock className="w-2.5 h-2.5 shrink-0" />
-                                      <span>↳ In corso fino alle {span.displayEnd}</span>
-                                    </div>
-                                    <span className="text-[9px] opacity-60 text-slate-500 font-mono hidden sm:inline">
-                                      {span.duration}m
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">
-                                    {b.titolo || clientName}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1209,175 +1399,265 @@ export default function AgendaClassica({
                 })}
               </div>
 
-              {/* Corpo Griglia Settimanale */}
-              <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                {TIME_SLOTS.map((time) => (
-                  <div
-                    key={time}
-                    className="grid min-h-[56px]"
-                    style={{ gridTemplateColumns: `75px repeat(7, minmax(130px, 1fr))` }}
-                  >
-                    {/* Indicatore Orario Sticky */}
-                    <div className="p-2 border-r border-slate-200/80 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs select-none sticky left-0 z-20 shadow-xs">
+              {/* Corpo Griglia Settimanale Continua */}
+              <div
+                className="grid relative"
+                style={{
+                  gridTemplateColumns: `75px repeat(7, minmax(130px, 1fr))`,
+                  height: `${TIME_SLOTS.length * SLOT_HEIGHT}px`,
+                }}
+              >
+                {/* Indicatore Orario Sticky a Sinistra */}
+                <div className="border-r border-slate-200/80 dark:border-slate-800 sticky left-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs select-none">
+                  {TIME_SLOTS.map((time) => (
+                    <div
+                      key={time}
+                      style={{ height: `${SLOT_HEIGHT}px` }}
+                      className="p-1.5 border-b border-slate-100 dark:border-slate-800/80 text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 flex items-start justify-center pt-1.5 shadow-2xs"
+                    >
                       {time}
                     </div>
+                  ))}
+                </div>
 
-                    {/* Ciascuno dei 7 giorni */}
-                    {weekDays.map((day) => {
-                      const dayStr = getBookingLocalDate(day);
-                      const slotStart = timeToMinutes(time);
-                      const slotEnd = slotStart + 30;
+                {/* Ciascuno dei 7 giorni della settimana */}
+                {weekDays.map((day) => {
+                  const dayStr = getBookingLocalDate(day);
+                  const isTodayDay = dayStr === todayStr;
 
-                      // Filtra prenotazioni del giorno 'dayStr' in base a selectedStaffFilter
-                      const relevantBookings = prenotazioni.filter((p) => {
-                        if (!p.tms_inizio) return false;
-                        if (isDishOrProductOrUntimed(p)) return false;
+                  // Filtra prenotazioni del giorno 'dayStr' in base a selectedStaffFilter
+                  const relevantBookings = prenotazioni.filter((p) => {
+                    if (!p.tms_inizio) return false;
+                    if (isDishOrProductOrUntimed(p)) return false;
 
-                        const bDate = getBookingLocalDate(p.tms_inizio);
-                        if (bDate !== dayStr) return false;
+                    const bDate = getBookingLocalDate(p.tms_inizio);
+                    if (bDate !== dayStr) return false;
 
-                        if (selectedStaffFilter === 'non_assegnato') {
-                          return !p.id_professionista;
-                        }
+                    if (selectedStaffFilter === 'non_assegnato') {
+                      return !p.id_professionista;
+                    }
 
-                        if (selectedStaffFilter !== 'tutti') {
-                          return p.id_professionista === selectedStaffFilter;
-                        }
+                    if (selectedStaffFilter !== 'tutti') {
+                      return p.id_professionista === selectedStaffFilter;
+                    }
 
-                        return true;
-                      });
+                    return true;
+                  });
 
-                      // Calcola le prenotazioni che si sovrappongono a questo slot considerando la durata
-                      const slotBookings = relevantBookings
-                        .map((p) => {
-                          const span = getBookingSpan(p);
-                          if (!span) return null;
-                          const overlaps = span.startMinutes < slotEnd && span.endMinutes > slotStart;
-                          if (!overlaps) return null;
-                          const isStart =
-                            (span.startMinutes >= slotStart && span.startMinutes < slotEnd) ||
-                            (slotStart === timeToMinutes(TIME_SLOTS[0]) && span.startMinutes < slotStart);
-                          return {
-                            booking: p,
-                            span,
-                            isStart,
-                          };
-                        })
-                        .filter(Boolean) as Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan; isStart: boolean }>;
+                  // Calcola le prenotazioni con span e posizionamento corsie
+                  const items = relevantBookings
+                    .map((p) => {
+                      const span = getBookingSpan(p);
+                      if (!span) return null;
+                      return { booking: p, span };
+                    })
+                    .filter(Boolean) as Array<{ booking: PrenotazioneWithDetails; span: BookingTimeSpan }>;
 
-                      const startingBookings = slotBookings.filter((s) => s.isStart);
-                      const continuingBookings = slotBookings.filter((s) => !s.isStart);
-                      const isOccupied = slotBookings.length > 0;
+                  const positioned = layoutBookingsInLanes(items);
 
-                      return (
-                        <div
-                          key={`${dayStr}-${time}`}
-                          onDragOver={handleDragOver}
-                          onDrop={() =>
-                            handleDropSlot(
-                              dayStr,
-                              time,
-                              typeof selectedStaffFilter === 'number' ? selectedStaffFilter : undefined
-                            )
-                          }
-                          onClick={() => {
-                            if (!isOccupied) {
-                              onSelectSlot({
-                                date: dayStr,
-                                time,
-                                staffId:
-                                  typeof selectedStaffFilter === 'number'
-                                    ? selectedStaffFilter
-                                    : undefined,
-                              });
-                            }
-                          }}
-                          className={`p-1.5 border-r border-slate-200/60 dark:border-slate-800/60 last:border-r-0 transition-colors relative group ${
-                            !isOccupied
-                              ? 'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 cursor-pointer'
-                              : 'bg-slate-50/30 dark:bg-slate-950/15'
-                          }`}
-                        >
-                          {/* Pulsante veloce aggiungi quando libero */}
-                          {!isOccupied && (
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md shadow-xs">
-                                + {time}
-                              </span>
+                  return (
+                    <div
+                      key={dayStr}
+                      className={`border-r border-slate-200/60 dark:border-slate-800/60 last:border-r-0 relative select-none ${
+                        isTodayDay ? 'bg-indigo-50/15 dark:bg-indigo-950/10' : ''
+                      }`}
+                      style={{ height: `${TIME_SLOTS.length * SLOT_HEIGHT}px` }}
+                    >
+                      {/* Layer 1: Slot di background da 30 minuti con guida a 15 minuti */}
+                      <div className="absolute inset-0 flex flex-col pointer-events-auto">
+                        {TIME_SLOTS.map((time) => {
+                          return (
+                            <div
+                              key={time}
+                              style={{ height: `${SLOT_HEIGHT}px` }}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const offsetY = e.clientY - rect.top;
+                                let targetTime = time;
+                                if (offsetY >= 30) {
+                                  targetTime = minutesToTime(timeToMinutes(time) + 15);
+                                }
+                                handleDropSlot(
+                                  dayStr,
+                                  targetTime,
+                                  typeof selectedStaffFilter === 'number' ? selectedStaffFilter : undefined
+                                );
+                              }}
+                              onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const offsetY = e.clientY - rect.top;
+                                let clickedTime = time;
+                                if (offsetY >= 30) {
+                                  clickedTime = minutesToTime(timeToMinutes(time) + 15);
+                                }
+                                onSelectSlot({
+                                  date: dayStr,
+                                  time: clickedTime,
+                                  staffId:
+                                    typeof selectedStaffFilter === 'number' ? selectedStaffFilter : undefined,
+                                });
+                              }}
+                              className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/15 cursor-pointer relative group transition-colors"
+                            >
+                              {/* Linea tratteggiata per il quarto d'ora a metà slot */}
+                              <div className="absolute left-0 right-0 top-1/2 border-b border-dashed border-slate-200/50 dark:border-slate-800/40 pointer-events-none" />
+
+                              {/* Prompt rapido al passaggio del mouse */}
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-0">
+                                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded-md shadow-xs">
+                                  + {time}
+                                </span>
+                              </div>
                             </div>
-                          )}
+                          );
+                        })}
+                      </div>
 
-                          {/* Prenotazioni per questo slot */}
-                          <div className="space-y-1">
-                            {/* 1. Prenotazioni che INIZIANO in questo slot */}
-                            {startingBookings.map(({ booking: b, span }) => {
-                              const staffColor = resolveStaffColor(b, professionisti);
-                              const staffName =
-                                b.professionisti?.nome ||
-                                (b.id_professionista
-                                  ? professionisti.find((p) => p.id === b.id_professionista)?.nome
-                                  : 'Hub');
-                              const clientName = b.rubrica
-                                ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
-                                : 'Cliente';
-                              const phone = b.rubrica?.telefono;
-                              const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
-                              const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
+                      {/* Layer 2: Indicatore linea rossa orario corrente (se giorno odierno) */}
+                      {isTodayDay && nowMinutes >= DAY_START_MINUTES && nowMinutes <= DAY_END_MINUTES && (
+                        <div
+                          className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
+                          style={{
+                            top: `${(nowMinutes - DAY_START_MINUTES) * PIXELS_PER_MINUTE}px`,
+                          }}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs -ml-1.5 ring-2 ring-white dark:ring-slate-900" />
+                          <div className="h-[2px] w-full bg-rose-500/85 shadow-xs" />
+                        </div>
+                      )}
 
-                              return (
-                                <div
-                                  key={b.id}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, b)}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditPrenotazione(b);
-                                  }}
-                                  style={{
-                                    borderLeft: `4px solid ${staffColor}`,
-                                    backgroundColor: hexToRgba(staffColor, 0.08),
-                                  }}
-                                  className="p-1.5 rounded-xl text-left border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing relative"
-                                >
-                                  <div className="flex items-center justify-between text-[10px] font-black mb-0.5">
+                      {/* Layer 3: Prenotazioni continue (TUTTA LA SLOT UNICA SENZA DUPLICAZIONI) */}
+                      <div className="absolute inset-0 pointer-events-none z-10">
+                        {positioned.map(({ booking: b, span, lane, totalLanes, top, height }) => {
+                          const staffColor = resolveStaffColor(b, professionisti);
+                          const staffName =
+                            b.professionisti?.nome ||
+                            (b.id_professionista
+                              ? professionisti.find((p) => p.id === b.id_professionista)?.nome
+                              : 'Hub');
+                          const clientName = b.rubrica
+                            ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
+                            : 'Cliente';
+                          const phone = b.rubrica?.telefono;
+                          const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
+                          const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
+
+                          const leftPercent = (lane / totalLanes) * 100;
+                          const widthPercent = 100 / totalLanes;
+
+                          const isQuarterHour = height <= 38;
+                          const isHalfHour = height > 38 && height <= 68;
+
+                          return (
+                            <div
+                              key={b.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, b)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditPrenotazione(b);
+                              }}
+                              title={`${b.titolo || clientName} (${staffName}) - ${span.displayStart} - ${span.displayEnd} (${span.duration}m). Clicca per modificare o trascina per spostare.`}
+                              style={{
+                                top: `${top + 1}px`,
+                                height: `${height - 2}px`,
+                                left: `calc(${leftPercent}% + 2px)`,
+                                width: `calc(${widthPercent}% - 4px)`,
+                                borderLeft: `4px solid ${staffColor}`,
+                                backgroundColor: hexToRgba(staffColor, 0.12),
+                              }}
+                              className="absolute rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs hover:shadow-md hover:z-30 transition-all cursor-grab active:cursor-grabbing pointer-events-auto overflow-hidden text-left"
+                            >
+                              {/* 1. LAYOUT COMPATTO: 15 MINUTI (Occupa solo il suo quarto d'ora, lasciando il resto libero) */}
+                              {isQuarterHour ? (
+                                <div className="h-full px-1.5 py-0.5 flex items-center justify-between gap-1 text-[10px] font-bold overflow-hidden">
+                                  <div className="flex items-center gap-1 truncate">
+                                    <span className="font-black font-mono text-[9px] shrink-0 text-slate-800 dark:text-slate-200">
+                                      {span.displayStart}
+                                    </span>
+                                    <span className="truncate text-slate-900 dark:text-slate-100 font-extrabold text-[10px]">
+                                      {b.titolo || clientName}
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] opacity-75 shrink-0 font-mono">
+                                    {span.duration}m
+                                  </span>
+                                </div>
+                              ) : isHalfHour ? (
+                                /* 2. LAYOUT MEDIO: 30 MINUTI */
+                                <div className="h-full p-1.5 flex flex-col justify-between overflow-hidden">
+                                  <div className="flex items-center justify-between gap-1 text-[10px] font-black">
                                     <span className="flex items-center gap-1">
                                       <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: staffColor }} />
                                       <span>{span.displayStart} - {span.displayEnd}</span>
                                     </span>
-                                    <div className="flex items-center gap-1">
-                                      {hasDishes && <span title="Piatto">🍕</span>}
-                                      {hasProducts && <span title="Prodotto">🛍️</span>}
-                                      <span className="text-[9px] opacity-70 font-semibold">
-                                        {span.duration}m
-                                      </span>
-                                    </div>
+                                    <span className="text-[9px] opacity-70 font-semibold font-mono">
+                                      {span.duration}m
+                                    </span>
                                   </div>
-
-                                  {/* Badge Staff (nella vista settimanale con tutti gli operatori) */}
-                                  {selectedStaffFilter === 'tutti' && staffName && (
-                                    <div className="mb-1">
-                                      <span
-                                        className="text-[9px] font-bold px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 max-w-full"
-                                        style={{
-                                          backgroundColor: hexToRgba(staffColor, 0.18),
-                                          color: staffColor,
-                                        }}
-                                      >
-                                        <span
-                                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                                          style={{ backgroundColor: staffColor }}
-                                        />
-                                        <span className="truncate">{staffName}</span>
-                                      </span>
-                                    </div>
-                                  )}
 
                                   <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100">
                                     {b.titolo || clientName}
                                   </div>
 
-                                  <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate flex items-center justify-between mt-1">
+                                  <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate flex items-center justify-between leading-none">
                                     <span className="truncate">{clientName}</span>
+                                    <span className="font-bold text-[9px] text-slate-800 dark:text-slate-200 font-mono">
+                                      €{Number(b.totale || 0).toFixed(0)}
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                /* 3. LAYOUT COMPLETO: 45+ MINUTI (Slot unica estesa fino alla fine) */
+                                <div className="h-full p-2 flex flex-col justify-between overflow-hidden">
+                                  <div>
+                                    <div className="flex items-center justify-between text-[10px] font-black mb-1">
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="w-2.5 h-2.5 shrink-0" style={{ color: staffColor }} />
+                                        <span>{span.displayStart} - {span.displayEnd}</span>
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        {hasDishes && <span title="Piatto">🍕</span>}
+                                        {hasProducts && <span title="Prodotto">🛍️</span>}
+                                        <span className="text-[9px] opacity-70 font-semibold font-mono">
+                                          {span.duration}m
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Badge Staff (se visualizziamo tutti gli operatori) */}
+                                    {selectedStaffFilter === 'tutti' && staffName && (
+                                      <div className="mb-1">
+                                        <span
+                                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 max-w-full"
+                                          style={{
+                                            backgroundColor: hexToRgba(staffColor, 0.18),
+                                            color: staffColor,
+                                          }}
+                                        >
+                                          <span
+                                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                                            style={{ backgroundColor: staffColor }}
+                                          />
+                                          <span className="truncate">{staffName}</span>
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100">
+                                      {b.titolo || clientName}
+                                    </div>
+                                    <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                                      {clientName}
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-1 pt-1 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between text-[10px]">
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 font-mono">
+                                      €{Number(b.totale || 0).toFixed(0)}
+                                    </span>
+
                                     {phone && (
                                       <div className="flex items-center gap-0.5 ml-1">
                                         <button
@@ -1400,59 +1680,14 @@ export default function AgendaClassica({
                                     )}
                                   </div>
                                 </div>
-                              );
-                            })}
-
-                            {/* 2. Prenotazioni in CORSO (Slot bloccati per durata) */}
-                            {continuingBookings.map(({ booking: b, span }) => {
-                              const staffColor = resolveStaffColor(b, professionisti);
-                              const staffName =
-                                b.professionisti?.nome ||
-                                (b.id_professionista
-                                  ? professionisti.find((p) => p.id === b.id_professionista)?.nome
-                                  : 'Hub');
-                              const clientName = b.rubrica
-                                ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
-                                : 'Cliente';
-
-                              return (
-                                <div
-                                  key={`cont-${b.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditPrenotazione(b);
-                                  }}
-                                  title={`In corso: ${b.titolo || clientName} (${staffName}) fino alle ${span.displayEnd}. Clicca per visualizzare o modificare.`}
-                                  style={{
-                                    borderLeft: `4px solid ${staffColor}`,
-                                    backgroundColor: hexToRgba(staffColor, 0.07),
-                                  }}
-                                  className="p-1.5 rounded-lg border-y border-r border-dashed border-slate-200/90 dark:border-slate-800/90 text-left shadow-2xs hover:brightness-95 transition-all cursor-pointer"
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <div
-                                      className="flex items-center gap-1 text-[9px] font-bold truncate"
-                                      style={{ color: staffColor }}
-                                    >
-                                      <Clock className="w-2.5 h-2.5 shrink-0" />
-                                      <span className="truncate">↳ {staffName}: {span.displayEnd}</span>
-                                    </div>
-                                    <span className="text-[9px] opacity-60 text-slate-500 font-mono shrink-0">
-                                      {span.duration}m
-                                    </span>
-                                  </div>
-                                  <div className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5">
-                                    {b.titolo || clientName}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
