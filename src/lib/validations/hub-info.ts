@@ -30,6 +30,7 @@ export const updateHubStyleSettingsSchema = z.object({
   has_dishes: z.boolean().default(false),
   has_services: z.boolean().default(false),
   has_booking: z.boolean().default(true),
+  is_visible: z.boolean().default(true),
   style: z.string().min(1, 'Seleziona uno stile').default('default'),
   type: z.string().optional(),
   palette: z.string().min(1, 'Seleziona una palette').default('emerald'),

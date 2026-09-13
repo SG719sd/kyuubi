@@ -137,6 +137,8 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
     },
   ];
 
+  const enabledModules = managementModules.filter((module) => !module.disabled);
+
   return (
     <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* HERO HEADER HUB */}
@@ -166,6 +168,22 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
                     <ShieldCheck className="w-3 h-3" /> ADMIN / OWNER
                   </span>
                 )}
+                {hub.is_visible !== false ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                    <Globe className="w-3 h-3" /> Vetrina Online
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-slate-300 bg-slate-500/20 px-2.5 py-0.5 rounded-full border border-slate-400/30">
+                    <Globe className="w-3 h-3" /> Vetrina Nascosta
+                  </span>
+                )}
+                <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
+                  hub.is_active !== false
+                    ? 'text-sky-300 bg-sky-500/20 border-sky-400/30'
+                    : 'text-rose-300 bg-rose-500/20 border-rose-400/30'
+                }`}>
+                  {hub.is_active !== false ? 'Hub Attivo' : 'Hub Bloccato'}
+                </span>
               </div>
 
               <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight text-white">
@@ -237,44 +255,32 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
             Pannelli di Gestione
           </h2>
           <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">
-            {managementModules.length} Moduli attivi
+            {enabledModules.length} Moduli attivi
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {managementModules.map((module) => {
+          {enabledModules.map((module) => {
             const Icon = module.icon;
-            const cardClassName = `group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between space-y-6 relative overflow-hidden ${
-              module.disabled
-                ? "opacity-50 cursor-not-allowed select-none"
-                : `${module.borderHover} hover:-translate-y-1 hover:shadow-lg shadow-xs`
-            }`;
+            const cardClassName = `group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between space-y-6 relative overflow-hidden ${module.borderHover} hover:-translate-y-1 hover:shadow-lg shadow-xs`;
 
             const cardContent = (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div
-                    className={`w-12 h-12 rounded-2xl ${module.bg} ${module.color} flex items-center justify-center transition-transform ${
-                      !module.disabled && "group-hover:scale-110"
-                    }`}
+                    className={`w-12 h-12 rounded-2xl ${module.bg} ${module.color} flex items-center justify-center transition-transform group-hover:scale-110`}
                   >
                     <Icon className="w-6 h-6" />
                   </div>
                   <div
-                    className={`w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 transition-all ${
-                      !module.disabled &&
-                      "group-hover:bg-indigo-600 group-hover:text-white"
-                    }`}
+                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 transition-all group-hover:bg-indigo-600 group-hover:text-white"
                   >
                     <ArrowRight className="w-4 h-4" />
                   </div>
                 </div>
 
                 <h3
-                  className={`text-lg font-bold text-slate-900 dark:text-white mb-1.5 transition-colors ${
-                    !module.disabled &&
-                    "group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
-                  }`}
+                  className="text-lg font-bold text-slate-900 dark:text-white mb-1.5 transition-colors group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
                 >
                   {module.title}
                 </h3>
@@ -284,14 +290,6 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
                 </p>
               </div>
             );
-
-            if (module.disabled) {
-              return (
-                <div key={module.title} className={cardClassName}>
-                  {cardContent}
-                </div>
-              );
-            }
 
             return (
               <Link

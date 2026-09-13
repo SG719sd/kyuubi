@@ -118,13 +118,13 @@ function LoginContent() {
         </div>
 
         <h1 className="text-2xl md:text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 dark:from-sky-400 dark:to-blue-400 mb-1.5">
-          {isRegistering ? 'Crea il tuo Hub' : 'Bentornato su Kyuubi'}
+          {isRegistering ? 'Crea il tuo Account' : 'Bentornato su Kyuubi'}
         </h1>
         
         <p className="text-slate-600 dark:text-slate-400 text-xs md:text-sm">
           {isRegistering
-            ? 'Inserisci i tuoi dati per registrare la tua attività'
-            : 'Accedi per gestire i tuoi servizi, prodotti e menù'}
+            ? 'Inserisci i tuoi dati personali per creare il tuo profilo'
+            : 'Accedi per gestire i tuoi Hubs e attività'}
         </p>
       </div>
 
@@ -157,7 +157,7 @@ function LoginContent() {
             }`}
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Crea un Hub</span>
+            <span>Registrati</span>
           </button>
         </div>
 
@@ -321,37 +321,47 @@ function LoginContent() {
 
           {isRegistering && (
             <div className="pt-2 space-y-3">
-              {/* CHECKBOX MARKETING */}
+              {/* CHECKBOX TOS & PRIVACY (OBBLIGATORIO) */}
+              <label className="flex items-start gap-3 text-xs text-slate-700 dark:text-slate-300 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  name="tos"
+                  required
+                  defaultChecked
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="leading-relaxed">
+                  Accetto i{' '}
+                  <Link 
+                    href="/termini-servizio" 
+                    target="_blank" 
+                    className="font-bold text-sky-600 dark:text-sky-400 underline underline-offset-2 hover:text-sky-500"
+                  >
+                    Termini di Servizio (TOS)
+                  </Link>{' '}
+                  e la{' '}
+                  <Link 
+                    href="/privacy-policy" 
+                    target="_blank" 
+                    className="font-bold text-sky-600 dark:text-sky-400 underline underline-offset-2 hover:text-sky-500"
+                  >
+                    Privacy Policy
+                  </Link>{' '}
+                  <span className="text-rose-500 font-bold">*</span>
+                </span>
+              </label>
+
+              {/* CHECKBOX MARKETING (OPZIONALE) */}
               <label className="flex items-start gap-3 text-xs text-slate-600 dark:text-slate-400 cursor-pointer group">
                 <input
                   type="checkbox"
                   name="marketing"
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 text-blue-600 focus:ring-blue-500"
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 text-sky-600 focus:ring-sky-500"
                 />
-                <span className="group-hover:text-slate-900 dark:group-hover:text-slate-300 transition-colors">
-                  Acconsento a ricevere aggiornamenti e comunicazioni su Kyuubi Ecosystem (opzionale)
+                <span className="group-hover:text-slate-900 dark:group-hover:text-slate-300 transition-colors leading-relaxed">
+                  Acconsento al trattamento dei dati personali per comunicazioni di Marketing (opzionale)
                 </span>
               </label>
-
-              {/* NOTA TOS & PRIVACY */}
-              <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/50 dark:border-slate-800/50 rounded-xl text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Registrandoti, accetti i nostri{' '}
-                <Link 
-                  href="/termini-servizio" 
-                  target="_blank" 
-                  className="font-semibold text-sky-600 dark:text-sky-400 underline underline-offset-2 hover:text-sky-500"
-                >
-                  Termini di Servizio
-                </Link>{' '}
-                e dichiari di aver letto la nostra{' '}
-                <Link 
-                  href="/privacy-policy" 
-                  target="_blank" 
-                  className="font-semibold text-sky-600 dark:text-sky-400 underline underline-offset-2 hover:text-sky-500"
-                >
-                  Privacy Policy
-                </Link>.
-              </div>
             </div>
           )}
 
@@ -362,7 +372,7 @@ function LoginContent() {
             disabled={loading || (isRegistering && !isPasswordValid)}
             className="w-full py-3.5 px-4 bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl shadow-lg shadow-sky-500/25 transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 mt-4 text-sm tracking-wide cursor-pointer"
           >
-            <span>{loading ? 'Elaborazione...' : isRegistering ? 'CREA IL TUO HUB' : 'ACCEDI AL PANNELLO'}</span>
+            <span>{loading ? 'Elaborazione...' : isRegistering ? 'CREA IL TUO ACCOUNT' : 'ACCEDI AL PANNELLO'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
@@ -378,7 +388,7 @@ function LoginContent() {
             <span>
               {isRegistering
                 ? 'Hai già un account? Accedi subito'
-                : 'Non hai ancora un account? Crea un Hub'}
+                : 'Non hai ancora un account? Registrati subito'}
             </span>
           </button>
         </div>

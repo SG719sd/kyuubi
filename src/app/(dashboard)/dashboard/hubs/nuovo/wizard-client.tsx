@@ -34,6 +34,8 @@ const INITIAL_FORM: CreateHubWizardDTO = {
   has_products: false,
   has_dishes: false,
   has_services: false,
+  has_booking: true,
+  is_visible: true,
   logo_url: '',
   indirizzo: '',
   citta: '',
@@ -315,39 +317,80 @@ export function WizardClient() {
             {/* MODULI ABILITATI */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase">
-                Moduli Abilitati
+                Moduli & Funzionalità Abilitate
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
                   <input
                     type="checkbox"
-                    checked={formData.has_products || false}
-                    onChange={(e) => updateField('has_products', e.target.checked)}
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    checked={formData.has_booking ?? true}
+                    onChange={(e) => updateField('has_booking', e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                   />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Prodotti</span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Prenotazioni & Calendario</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Gestione appuntamenti e disponibilità</span>
+                  </div>
                 </label>
 
-                <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
-                  <input
-                    type="checkbox"
-                    checked={formData.has_dishes || false}
-                    onChange={(e) => updateField('has_dishes', e.target.checked)}
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                  />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Piatti / Menu</span>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
+                <label className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
                   <input
                     type="checkbox"
                     checked={formData.has_services || false}
                     onChange={(e) => updateField('has_services', e.target.checked)}
-                    className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                   />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Servizi</span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Catalogo Servizi</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Listini prezzi e durate prestazioni</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={formData.has_products || false}
+                    onChange={(e) => updateField('has_products', e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Prodotti & Magazzino</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Vendita al dettaglio e giacenze</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={formData.has_dishes || false}
+                    onChange={(e) => updateField('has_dishes', e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Piatti & Menù Ristorante</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Menù digitale e gestione allergeni</span>
+                  </div>
                 </label>
               </div>
+            </div>
+
+            {/* VISIBILITÀ VETRINA PUBBLICA */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase">
+                Visibilità Vetrina
+              </label>
+              <label className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer hover:border-sky-500/50 transition-all">
+                <input
+                  type="checkbox"
+                  checked={formData.is_visible ?? true}
+                  onChange={(e) => updateField('is_visible', e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Vetrina Pubblica Visibile (Online)</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Rendi l'Hub visibile nella vetrina pubblica della piattaforma</span>
+                </div>
+              </label>
             </div>
           </div>
         )}

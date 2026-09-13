@@ -84,6 +84,7 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
     has_dishes: Boolean(initialData.hub.has_dishes),
     has_services: Boolean(initialData.hub.has_services),
     has_booking: Boolean(initialData.hub.has_booking ?? true),
+    is_visible: Boolean(initialData.hub.is_visible ?? true),
     style: initialData.hub.style || initialData.hub.type || "default",
     type: initialData.hub.style || initialData.hub.type || "default",
     palette: initialData.hub.palette || "emerald",
@@ -740,6 +741,64 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
                     </p>
                   </div>
                 </label>
+              </div>
+            </div>
+
+            {/* Sezione Visibilità & Stato Hub */}
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-slate-400" /> Visibilità & Stato Hub
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Switch is_visible */}
+                <label
+                  className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                    styleSettings.is_visible
+                      ? "bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800"
+                      : "bg-slate-50/50 dark:bg-slate-950/40 border-slate-200/80 dark:border-slate-800"
+                  }`}
+                >
+                  <input
+                    disabled={!isAdmin}
+                    type="checkbox"
+                    checked={styleSettings.is_visible}
+                    onChange={(e) =>
+                      setStyleSettings({
+                        ...styleSettings,
+                        is_visible: e.target.checked,
+                      })
+                    }
+                    className="mt-1 h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        Vetrina Pubblica Visibile
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Rendi l'Hub visibile nella vetrina pubblica della piattaforma.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Stato is_active (gestito dall'amministratore) */}
+                <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-start gap-3">
+                  <div className="mt-1">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${initialData.hub.is_active ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-rose-500'}`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        Stato Account Hub: {initialData.hub.is_active ? 'Attivo' : 'Sospeso / Bloccato'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Lo stato di attivazione o sospensione è gestito dall'amministratore della piattaforma.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

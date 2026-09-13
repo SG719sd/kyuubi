@@ -36,7 +36,7 @@ export class CreateHubOrchestrator {
       sito_web: dto.sito_web || null,
       descrizione: dto.descrizione || null,
       is_active: true,
-      is_visible: true,
+      is_visible: dto.is_visible ?? true,
     });
 
     // 3. Creazione del Professionista associato (Proprietario & Admin)

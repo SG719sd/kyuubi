@@ -61,6 +61,7 @@ export interface CreateHubWizardDTO {
   has_dishes?: boolean;
   has_services?: boolean;
   has_booking?: boolean;
+  is_visible?: boolean;
   logo_url?: string;
   indirizzo?: string;
   citta?: string;

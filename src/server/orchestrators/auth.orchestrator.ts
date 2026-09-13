@@ -10,6 +10,7 @@ export type RegisterParams = {
   nome: string;
   cognome: string;
   telefono: string;
+  tosAccettato?: boolean;
   marketingAccettato?: boolean;
   ipAddress: string;
 };
@@ -58,11 +59,12 @@ export class AuthOrchestrator {
       }
     }
 
-    // 3. Salva Consensi nel DB (se consentito da RLS o trigger)
+    // 3. Salva Consensi nel DB (TOS e Marketing se flaggati)
     try {
       await ConsensiService.saveInitialConsents({
         userId,
         ipAddress: params.ipAddress,
+        tosAccettato: params.tosAccettato ?? true,
         marketingAccettato: !!params.marketingAccettato,
       });
     } catch (err: any) {

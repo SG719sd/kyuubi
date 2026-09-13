@@ -33,6 +33,7 @@ export class HubInfoService {
       has_dishes: validated.has_dishes,
       has_services: validated.has_services,
       has_booking: validated.has_booking,
+      is_visible: validated.is_visible,
       style: styleVal,
       palette: validated.palette,
     });

@@ -3,23 +3,32 @@ import { ConsensiRepository } from '../repositories/consensi.repository';
 export type InitialConsentsParams = {
   userId: string;
   ipAddress: string;
-  marketingAccettato: boolean;
+  tosAccettato?: boolean;
+  marketingAccettato?: boolean;
 };
 
 export class ConsensiService {
   /**
-   * Salva i consensi iniziali raccolti al momento della registrazione
+   * Salva i consensi iniziali raccolti al momento della registrazione dell'utente
+   * Inserisce 'TOS' (se accettato) e 'MARKETING' (se flaggato)
    */
-  static async saveInitialConsents({ userId, ipAddress, marketingAccettato }: InitialConsentsParams) {
-    const consensiToInsert = [
-      {
+  static async saveInitialConsents({
+    userId,
+    ipAddress,
+    tosAccettato = true,
+    marketingAccettato = false,
+  }: InitialConsentsParams) {
+    const consensiToInsert = [];
+
+    if (tosAccettato) {
+      consensiToInsert.push({
         id_user: userId,
-        tipo_consenso: 'TOS_PIATTAFORMA',
+        tipo_consenso: 'TOS',
         versione_policy: 'v1.0',
         stato: 'ACCETTATO',
         ip_address: ipAddress,
-      },
-    ];
+      });
+    }
 
     if (marketingAccettato) {
       consensiToInsert.push({
@@ -30,6 +39,8 @@ export class ConsensiService {
         ip_address: ipAddress,
       });
     }
+
+    if (consensiToInsert.length === 0) return [];
 
     return await ConsensiRepository.createMany(consensiToInsert);
   }

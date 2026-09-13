@@ -24,10 +24,15 @@ export async function registerAction(formData: FormData): Promise<ActionResponse
   const nome = formData.get('nome') as string;
   const cognome = formData.get('cognome') as string;
   const telefono = formData.get('telefono') as string;
+  const tosAccettato = formData.get('tos') === 'on';
   const marketingAccettato = formData.get('marketing') === 'on';
 
   if (!email || !password || !nome || !cognome || !telefono) {
     return { success: false, error: 'Tutti i campi obbligatori devono essere compilati.' };
+  }
+
+  if (!tosAccettato) {
+    return { success: false, error: 'È obbligatorio accettare i Termini di Servizio e la Privacy Policy per creare un account.' };
   }
 
   // Estrazione dell'IP Address reale dagli header HTTP
@@ -47,6 +52,7 @@ export async function registerAction(formData: FormData): Promise<ActionResponse
       nome,
       cognome,
       telefono,
+      tosAccettato,
       marketingAccettato,
       ipAddress,
     });
