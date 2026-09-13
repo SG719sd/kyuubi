@@ -3,6 +3,9 @@ import { ProfessionistiRepository } from "../repositories/professionisti.reposit
 import { HubBillingRepository } from "../repositories/hub-billing.repository";
 import { ConsensiRepository } from "../repositories/consensi.repository";
 import { UserRepository } from "../repositories/user.repository";
+import { StorageService } from "../services/storage.service";
+import { HubInfoRepository } from "../repositories/hub-info.repository";
+import { getHubStoragePath } from "@/types/storage-paths";
 import { CreateHubWizardDTO, HubRow, TablesInsert } from "@/types";
 
 export class CreateHubOrchestrator {
@@ -39,18 +42,62 @@ export class CreateHubOrchestrator {
       is_visible: dto.is_visible ?? true,
     });
 
-    // 3. Creazione del Professionista associato (Proprietario & Admin)
-    await ProfessionistiRepository.create({
-      id_hub: hub.id,
-      id_user: dto.userId,
-      nome: `${user.nome} ${user.cognome}`.trim(),
-      ruolo: "Titolare",
-      admin: true,
-      is_active: true,
-      is_visible: true,
-      red_flags: 0,
-      preferito: false,
-    });
+    // 2.1 Gestione Caricamento e Salvataggio Logo iniziale su Supabase Storage
+    if (dto.logo_url) {
+      try {
+        if (dto.logo_url.startsWith("data:")) {
+          const parts = dto.logo_url.split(",");
+          if (parts.length > 1) {
+            const mimeMatch = parts[0].match(/:(.*?);/);
+            const contentType = mimeMatch ? mimeMatch[1] : "image/webp";
+            const buffer = Buffer.from(parts[1], "base64");
+            const storagePath = getHubStoragePath.logo(hub.id, "logo.webp");
+            const uploadRes = await StorageService.uploadFile(storagePath, buffer, contentType);
+            if (uploadRes.url) {
+              await HubInfoRepository.updateHub(hub.id, { logo_url: uploadRes.url });
+              hub.logo_url = uploadRes.url;
+            }
+          }
+        } else if (dto.logo_url.startsWith("http://") || dto.logo_url.startsWith("https://")) {
+          await HubInfoRepository.updateHub(hub.id, { logo_url: dto.logo_url });
+          hub.logo_url = dto.logo_url;
+        }
+      } catch (err: any) {
+        console.warn("Avviso durante l'upload del logo dell'Hub su storage:", err?.message);
+      }
+    }
+
+    // 3. Gestione del Professionista associato (Proprietario & Admin)
+    // Nota: Il database potrebbe avere un trigger AFTER INSERT su hubs che crea già il professionista titolare.
+    // Verifichiamo se esiste già per evitare la violazione del vincolo 'professionisti_user_hub_key'.
+    try {
+      const existingProfList = await ProfessionistiRepository.getByHubId(hub.id);
+      const existingProf = existingProfList?.find((p) => p.id_user === dto.userId);
+
+      if (existingProf) {
+        await ProfessionistiRepository.update(existingProf.id, {
+          nome: `${user.nome} ${user.cognome}`.trim(),
+          ruolo: "Titolare",
+          admin: true,
+          is_active: true,
+          is_visible: true,
+        });
+      } else {
+        await ProfessionistiRepository.create({
+          id_hub: hub.id,
+          id_user: dto.userId,
+          nome: `${user.nome} ${user.cognome}`.trim(),
+          ruolo: "Titolare",
+          admin: true,
+          is_active: true,
+          is_visible: true,
+          red_flags: 0,
+          preferito: false,
+        });
+      }
+    } catch (err: any) {
+      console.warn("Nota inserimento professionista titolare (già creato da trigger DB):", err?.message);
+    }
 
     // 4. Inserimento Billing Info (se compilato almeno un campo)
     const hasBilling =

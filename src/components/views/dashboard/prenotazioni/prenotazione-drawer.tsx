@@ -17,12 +17,16 @@ import {
   Mail,
   Copy,
   Check,
+  Search,
+  UserPlus,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   upsertPrenotazioneAction,
   deletePrenotazioneAction,
   calcolaSlotDisponibiliAction,
 } from '@/server/actions/prenotazioni.actions';
+import { createRubricaAction } from '@/server/actions/rubrica.actions';
 import { PrenotazioneWithDetails } from '@/server/repositories/prenotazioni.repository';
 
 interface Props {
@@ -84,6 +88,22 @@ export default function PrenotazioneDrawer({
   const [note, setNote] = useState('');
   const [stato, setStato] = useState<'pending' | 'confermata' | 'completata' | 'cancellata'>('pending');
 
+  // Clienti list locale sincronizzata con aggiunte al volo
+  const [clientiList, setClientiList] = useState<any[]>(clienti);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
+  const [showQuickAddClient, setShowQuickAddClient] = useState(false);
+  const [quickClientSuccessMsg, setQuickClientSuccessMsg] = useState<string | null>(null);
+
+  // Quick Add Client form state
+  const [quickNome, setQuickNome] = useState('');
+  const [quickCognome, setQuickCognome] = useState('');
+  const [quickTelefono, setQuickTelefono] = useState('');
+  const [quickEmail, setQuickEmail] = useState('');
+  const [quickNote, setQuickNote] = useState('');
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [quickError, setQuickError] = useState<string | null>(null);
+
   // Date and Time
   const [dateStr, setDateStr] = useState('');
   const [timeStr, setTimeStr] = useState('09:00');
@@ -96,13 +116,28 @@ export default function PrenotazioneDrawer({
   const [itemTypeToAdd, setItemTypeToAdd] = useState<'servizio' | 'prodotto' | 'piatto'>('servizio');
   const [selectedCatalogItemId, setSelectedCatalogItemId] = useState<string>('');
 
+  // Catalog item search & category filter (Autocompiler)
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
+  const [catalogFilterType, setCatalogFilterType] = useState<'tutti' | 'servizio' | 'prodotto' | 'piatto'>('tutti');
+
   // Available slots preview
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [slotMessage, setSlotMessage] = useState<string | null>(null);
 
+  // Sincronizza clientiList se cambiano le props
+  useEffect(() => {
+    setClientiList(clienti);
+  }, [clienti]);
+
   // Initialize form
   useEffect(() => {
+    setClientSearchQuery('');
+    setIsClientSearchOpen(false);
+    setShowQuickAddClient(false);
+    setQuickError(null);
+    setItemSearchQuery('');
+
     if (initialData) {
       setSelectedClienteId(initialData.id_rubrica || null);
       setSelectedStaffId(initialData.id_professionista || null);
@@ -227,13 +262,179 @@ export default function PrenotazioneDrawer({
   // Cliente attualmente collegato o selezionato
   const currentClient = useMemo(() => {
     if (selectedClienteId) {
-      return clienti.find((c) => c.id === selectedClienteId) || null;
+      return clientiList.find((c) => c.id === selectedClienteId) || null;
     }
     if (initialData?.rubrica) {
       return initialData.rubrica;
     }
     return null;
-  }, [selectedClienteId, clienti, initialData]);
+  }, [selectedClienteId, clientiList, initialData]);
+
+  // Ricerca live clienti (Autocompiler utenti)
+  const filteredClienti = useMemo(() => {
+    const q = clientSearchQuery.trim().toLowerCase();
+    if (!q) return clientiList.slice(0, 8);
+    return clientiList.filter((c) => {
+      const full = `${c.nome || ''} ${c.cognome || ''}`.toLowerCase();
+      const tel = (c.telefono || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      return full.includes(q) || tel.includes(q) || email.includes(q);
+    });
+  }, [clientiList, clientSearchQuery]);
+
+  // Apri pannello rapido "Aggiungi in Rubrica" con autocompilazione intelligente
+  const handleOpenQuickAdd = () => {
+    setShowQuickAddClient(true);
+    setIsClientSearchOpen(false);
+    setQuickError(null);
+    const trimmed = clientSearchQuery.trim();
+    if (/^[0-9+\s\-()]+$/.test(trimmed) && trimmed.length >= 3) {
+      setQuickTelefono(trimmed);
+      setQuickNome('');
+      setQuickCognome('');
+    } else if (trimmed) {
+      const parts = trimmed.split(' ');
+      setQuickNome(parts[0] || '');
+      setQuickCognome(parts.slice(1).join(' ') || '');
+      setQuickTelefono('');
+    } else {
+      setQuickNome('');
+      setQuickCognome('');
+      setQuickTelefono('');
+    }
+    setQuickEmail('');
+    setQuickNote('Inserito da prenotazione');
+  };
+
+  // Salva cliente in Rubrica ed associalo istantaneamente
+  const handleSaveQuickClient = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!quickNome.trim()) {
+      setQuickError('Il nome del cliente è obbligatorio.');
+      return;
+    }
+
+    setQuickLoading(true);
+    setQuickError(null);
+
+    try {
+      const res = await createRubricaAction(
+        {
+          id_hub: hubId,
+          nome: quickNome.trim(),
+          cognome: quickCognome.trim() || null,
+          telefono: quickTelefono.trim() || null,
+          email: quickEmail.trim() || null,
+          note: quickNote.trim() || 'Inserito da prenotazione telefonica',
+          is_active: true,
+        },
+        hubSlug
+      );
+
+      if (!res.success || !res.data) {
+        throw new Error(res.error || 'Impossibile salvare il cliente in rubrica');
+      }
+
+      const newClient = res.data;
+      setClientiList((prev) => [newClient, ...prev]);
+      setSelectedClienteId(newClient.id);
+      if (!titolo.trim()) {
+        setTitolo(`${newClient.nome} ${newClient.cognome || ''}`.trim());
+      }
+      setShowQuickAddClient(false);
+      setClientSearchQuery('');
+      setQuickClientSuccessMsg(`Cliente "${newClient.nome}" aggiunto in Rubrica e collegato!`);
+      setTimeout(() => setQuickClientSuccessMsg(null), 4000);
+      router.refresh();
+    } catch (err: any) {
+      setQuickError(err.message || 'Errore durante il salvataggio in rubrica');
+    } finally {
+      setQuickLoading(false);
+    }
+  };
+
+  // Catalogo unificato e ricercabile (Autocompiler prestazioni, prodotti e piatti)
+  const unifiedCatalog = useMemo(() => {
+    const list: {
+      id: number;
+      tipo: 'servizio' | 'prodotto' | 'piatto';
+      titolo: string;
+      prezzo: number;
+      tempo_minuti: number;
+      isCustomized?: boolean;
+    }[] = [];
+
+    // Servizi
+    availableServizi.forEach((s) => {
+      list.push({
+        id: s.id,
+        tipo: 'servizio',
+        titolo: s.titolo,
+        prezzo: Number(s.prezzo) || 0,
+        tempo_minuti: Number(s.tempo_minuti) || 30,
+        isCustomized: s.isCustomized,
+      });
+    });
+
+    // Prodotti
+    prodotti.forEach((p) => {
+      list.push({
+        id: p.id,
+        tipo: 'prodotto',
+        titolo: p.titolo,
+        prezzo: Number(p.prezzo_listino || p.prezzo_nuovo) || 0,
+        tempo_minuti: Number(p.tempo_minuti) || 0,
+      });
+    });
+
+    // Piatti
+    piatti.forEach((p) => {
+      list.push({
+        id: p.id,
+        tipo: 'piatto',
+        titolo: p.titolo,
+        prezzo: Number(p.prezzo) || 0,
+        tempo_minuti: Number(p.tempo_minuti) || 0,
+      });
+    });
+
+    return list;
+  }, [availableServizi, prodotti, piatti]);
+
+  // Catalogo filtrato per ricerca e tipologia
+  const filteredCatalog = useMemo(() => {
+    let result = unifiedCatalog;
+    if (catalogFilterType !== 'tutti') {
+      result = result.filter((item) => item.tipo === catalogFilterType);
+    }
+    const q = itemSearchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((item) => item.titolo.toLowerCase().includes(q));
+    }
+    return result;
+  }, [unifiedCatalog, catalogFilterType, itemSearchQuery]);
+
+  // Aggiunta rapida con un clic dal catalogo
+  const handleAddCatalogItem = (item: {
+    id: number;
+    tipo: 'servizio' | 'prodotto' | 'piatto';
+    titolo: string;
+    prezzo: number;
+    tempo_minuti: number;
+  }) => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id_item: item.id,
+        tipo: item.tipo,
+        titolo: item.titolo,
+        quantita: 1,
+        prezzo: item.prezzo,
+        tempo_minuti: item.tempo_minuti,
+        note: '',
+      },
+    ]);
+  };
 
   // Compute total duration and price
   const totalMinutes = useMemo(() => {
@@ -570,77 +771,68 @@ export default function PrenotazioneDrawer({
 
           <form id="prenotazione-form" onSubmit={handleSubmit} className="space-y-6">
             
-            {/* Sezione Cliente & Operatore */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Cliente da Rubrica */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-slate-400" />
-                  Cliente (Rubrica)
-                </label>
-                <select
-                  value={selectedClienteId || ''}
-                  onChange={(e) => setSelectedClienteId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                >
-                  <option value="">-- Seleziona o lascia vuoto --</option>
-                  {clienti.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nome} {c.cognome || ''} {c.telefono ? `(${c.telefono})` : ''}
-                    </option>
-                  ))}
-                </select>
+            {/* Feedback rapido aggiunta cliente */}
+            {quickClientSuccessMsg && (
+              <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 animate-fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>{quickClientSuccessMsg}</span>
               </div>
+            )}
 
-              {/* Staff / Operatore */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-indigo-500" />
-                  Operatore Assegnato
-                </label>
-                <select
-                  value={selectedStaffId || ''}
-                  onChange={(e) => setSelectedStaffId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                >
-                  <option value="">-- Nessun operatore specifico --</option>
-                  {professionisti.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nome} ({p.ruolo})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-            </div>
-
-            {/* SEZIONE CONTATTI RAPIDI CLIENTE */}
-            {currentClient && (currentClient.telefono || currentClient.email) && (
-              <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 space-y-2">
+            {/* SEZIONE CLIENTE & OPERATORE */}
+            {currentClient ? (
+              /* CARD CLIENTE SELEZIONATO CON CONTATTI RAPIDI */
+              <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5" />
-                    Contatti Rapidi Cliente ({currentClient.nome} {currentClient.cognome || ''})
-                  </span>
-                  {currentClient.telefono && (
-                    <button
-                      type="button"
-                      onClick={handleCopyPhone}
-                      className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      {copiedPhone ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedPhone ? 'Copiato!' : currentClient.telefono}</span>
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs">
+                      {currentClient.nome?.charAt(0) || 'C'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                          {currentClient.nome} {currentClient.cognome || ''}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
+                          In Rubrica
+                        </span>
+                      </div>
+                      {currentClient.note && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-xs">
+                          {currentClient.note}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedClienteId(null);
+                      setClientSearchQuery('');
+                      setIsClientSearchOpen(false);
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Cambia / Rimuovi
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap pt-1">
+                {/* Pulsanti azioni rapide di contatto */}
+                <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-indigo-200/50 dark:border-indigo-800/40">
                   {currentClient.telefono && (
                     <>
+                      <button
+                        type="button"
+                        onClick={handleCopyPhone}
+                        className="px-2.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        {copiedPhone ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedPhone ? 'Copiato!' : currentClient.telefono}</span>
+                      </button>
+
                       <a
                         href={`tel:${currentClient.telefono}`}
-                        className="px-3 py-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+                        className="px-3 py-1 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs"
                       >
                         <Phone className="w-3.5 h-3.5 text-indigo-500" />
                         Chiama
@@ -650,7 +842,7 @@ export default function PrenotazioneDrawer({
                         href={getWhatsAppLink()}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
                         WhatsApp Promemoria
@@ -661,13 +853,309 @@ export default function PrenotazioneDrawer({
                   {currentClient.email && (
                     <a
                       href={`mailto:${currentClient.email}?subject=Promemoria%20Appuntamento&body=Gentile%20${encodeURIComponent(currentClient.nome)},%20ti%20ricordiamo%20il%20tuo%20appuntamento%20il%20${dateStr}%20alle%20${timeStr}.`}
-                      className="px-3 py-1.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-2xs"
+                      className="px-3 py-1 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs"
                     >
                       <Mail className="w-3.5 h-3.5 text-slate-500" />
-                      Invia Email
+                      Email
                     </a>
                   )}
                 </div>
+
+                {/* Operatore Assegnato in riga compatta quando cliente è selezionato */}
+                <div className="pt-2 border-t border-indigo-200/50 dark:border-indigo-800/40 flex items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-indigo-500" />
+                    Operatore Assegnato:
+                  </span>
+                  <select
+                    value={selectedStaffId || ''}
+                    onChange={(e) => setSelectedStaffId(e.target.value ? Number(e.target.value) : null)}
+                    className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-white cursor-pointer"
+                  >
+                    <option value="">-- Nessun operatore specifico --</option>
+                    {professionisti.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome} ({p.ruolo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : showQuickAddClient ? (
+              /* MODULO RAPIDO AGGIUNGI IN RUBRICA */
+              <div className="p-4 rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                      <UserPlus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                        Registra Cliente al Telefono in Rubrica
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Salva i dati del cliente per ritrovarlo sempre e inviargli promemoria
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddClient(false)}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {quickError && (
+                  <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{quickError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Nome *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Es. Mario"
+                      value={quickNome}
+                      onChange={(e) => setQuickNome(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Cognome
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Es. Rossi"
+                      value={quickCognome}
+                      onChange={(e) => setQuickCognome(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Telefono (per WhatsApp & Chiamate)
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="Es. 3331234567"
+                      value={quickTelefono}
+                      onChange={(e) => setQuickTelefono(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Email (opzionale)
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="Es. cliente@gmail.com"
+                      value={quickEmail}
+                      onChange={(e) => setQuickEmail(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Note cliente (es. Preferenze o come ci ha conosciuto)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Es. Prenotazione telefonica"
+                      value={quickNote}
+                      onChange={(e) => setQuickNote(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-200/50 dark:border-amber-800/40">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddClient(false)}
+                    className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveQuickClient()}
+                    disabled={quickLoading}
+                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {quickLoading ? (
+                      <span>Salvataggio in corso...</span>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Salva in Rubrica e Collega</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* RICERCA INTELLIGENTE / AUTOCOMPILER CLIENTE DA RUBRICA + OPERATORE */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Autocompiler Ricerca Cliente */}
+                <div className="space-y-1.5 relative">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      Cerca Cliente in Rubrica
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleOpenQuickAdd}
+                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>+ Aggiungi in Rubrica</span>
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Digita nome, cognome o telefono..."
+                      value={clientSearchQuery}
+                      onChange={(e) => {
+                        setClientSearchQuery(e.target.value);
+                        setIsClientSearchOpen(true);
+                      }}
+                      onFocus={() => setIsClientSearchOpen(true)}
+                      className="w-full pl-8 pr-8 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                    {clientSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClientSearchQuery('');
+                          setIsClientSearchOpen(false);
+                        }}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown Live Risultati Autocompiler */}
+                  {isClientSearchOpen && (
+                    <div className="absolute left-0 right-0 z-30 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+                      {filteredClienti.length > 0 ? (
+                        <div className="py-1">
+                          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-950/60 border-b border-slate-100 dark:border-slate-800">
+                            Clienti trovati ({filteredClienti.length})
+                          </div>
+                          {filteredClienti.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedClienteId(c.id);
+                                if (!titolo.trim()) {
+                                  setTitolo(`${c.nome} ${c.cognome || ''}`.trim());
+                                }
+                                setIsClientSearchOpen(false);
+                                setClientSearchQuery('');
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/50 flex items-center justify-between gap-2 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800/40 last:border-0"
+                            >
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
+                                  {c.nome} {c.cognome || ''}
+                                </span>
+                                {c.telefono && (
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                    <Phone className="w-3 h-3 text-slate-400" />
+                                    {c.telefono}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold shrink-0">
+                                Collega
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 text-center space-y-2">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Nessun contatto trovato con &quot;{clientSearchQuery}&quot;
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleOpenQuickAdd}
+                            className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>+ Aggiungi subito in Rubrica</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Helper per chiudere o usare come titolo libero */}
+                      <div className="p-2 bg-slate-50 dark:bg-slate-950/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                        {clientSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTitolo(clientSearchQuery);
+                              setIsClientSearchOpen(false);
+                            }}
+                            className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
+                          >
+                            Usa &quot;{clientSearchQuery}&quot; come titolo
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setIsClientSearchOpen(false)}
+                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-auto"
+                        >
+                          Chiudi
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-400">
+                    Seleziona un cliente da Rubrica oppure usa <strong>+ Aggiungi</strong> per registrarlo al volo.
+                  </p>
+                </div>
+
+                {/* Staff / Operatore */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-indigo-500" />
+                    Operatore Assegnato
+                  </label>
+                  <select
+                    value={selectedStaffId || ''}
+                    onChange={(e) => setSelectedStaffId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  >
+                    <option value="">-- Nessun operatore specifico --</option>
+                    {professionisti.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome} ({p.ruolo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
               </div>
             )}
 
@@ -891,58 +1379,190 @@ export default function PrenotazioneDrawer({
                 </span>
               </div>
 
-              {/* Barra aggiunta item con catalogo adattato all'operatore */}
-              <div className="flex flex-col sm:flex-row gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800">
-                {/* Tipo Item */}
-                <select
-                  value={itemTypeToAdd}
-                  onChange={(e) => {
-                    setItemTypeToAdd(e.target.value as any);
-                    setSelectedCatalogItemId('');
-                  }}
-                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-white cursor-pointer"
-                >
-                  <option value="servizio">🛠️ Servizio</option>
-                  <option value="prodotto">🛍️ Prodotto</option>
-                  <option value="piatto">🍽️ Menù / Piatto</option>
-                </select>
+              {/* Autocompiler & Ricerca Rapida Catalogo */}
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                {/* Filtri categoria & Barra di ricerca */}
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
+                  {/* Categoria Tabs */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCatalogFilterType('tutti')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
+                        catalogFilterType === 'tutti'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      }`}
+                    >
+                      Tutti ({unifiedCatalog.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCatalogFilterType('servizio')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
+                        catalogFilterType === 'servizio'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      }`}
+                    >
+                      🛠️ Servizi ({availableServizi.length})
+                    </button>
+                    {prodotti.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogFilterType('prodotto')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
+                          catalogFilterType === 'prodotto'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        }`}
+                      >
+                        🛍️ Prodotti ({prodotti.length})
+                      </button>
+                    )}
+                    {piatti.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogFilterType('piatto')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap text-[11px] ${
+                          catalogFilterType === 'piatto'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        }`}
+                      >
+                        🍽️ Menù ({piatti.length})
+                      </button>
+                    )}
+                  </div>
 
-                {/* Dropdown specifico del catalogo (Servizi personalizzati se presenti per l'operatore) */}
-                <select
-                  value={selectedCatalogItemId}
-                  onChange={(e) => setSelectedCatalogItemId(e.target.value)}
-                  className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white cursor-pointer"
-                >
-                  <option value="">-- Seleziona dal catalogo --</option>
-                  {itemTypeToAdd === 'servizio' &&
-                    availableServizi.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.titolo} • € {Number(s.prezzo).toFixed(2)} ({s.tempo_minuti} min){s.isCustomized ? ' 🌟' : ''}
-                      </option>
-                    ))}
-                  {itemTypeToAdd === 'prodotto' &&
-                    prodotti.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.titolo} • € {Number(p.prezzo_listino || p.prezzo_nuovo).toFixed(2)}
-                      </option>
-                    ))}
-                  {itemTypeToAdd === 'piatto' &&
-                    piatti.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.titolo} • € {Number(p.prezzo).toFixed(2)}
-                      </option>
-                    ))}
-                </select>
+                  {/* Input Ricerca Live Prestazione */}
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Filtra / cerca prestazione o articolo..."
+                      value={itemSearchQuery}
+                      onChange={(e) => setItemSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    />
+                    {itemSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setItemSearchQuery('')}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  disabled={!selectedCatalogItemId}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Aggiungi
-                </button>
+                {/* Quick Add Pills / Cards dei risultati (1 clic per aggiungere) */}
+                {filteredCatalog.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Tocca per aggiungere istantaneamente:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {filteredCatalog.slice(0, 10).map((catItem) => (
+                        <button
+                          key={`${catItem.tipo}-${catItem.id}`}
+                          type="button"
+                          onClick={() => handleAddCatalogItem(catItem)}
+                          className="px-3 py-2 bg-white dark:bg-slate-900 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl text-left transition-all group flex items-center justify-between gap-2 cursor-pointer shadow-2xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                {catItem.tipo === 'servizio' ? '🛠️' : catItem.tipo === 'prodotto' ? '🛍️' : '🍽️'}
+                              </span>
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                {catItem.titolo}
+                              </span>
+                              {catItem.isCustomized && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold" title="Prezzo o tempo dedicato all'operatore">
+                                  🌟
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                € {catItem.prezzo.toFixed(2)}
+                              </span>
+                              {catItem.tempo_minuti > 0 && (
+                                <span>• {catItem.tempo_minuti} min</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                            <Plus className="w-3.5 h-3.5" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                    Nessun elemento corrisponde alla ricerca &quot;{itemSearchQuery}&quot;
+                  </div>
+                )}
+
+                {/* Selettore classico alternativo a tendina */}
+                <details className="text-[11px] text-slate-500 group">
+                  <summary className="cursor-pointer hover:text-indigo-600 font-semibold flex items-center gap-1 select-none">
+                    <span>Oppure seleziona tramite menu a tendina</span>
+                  </summary>
+                  <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={itemTypeToAdd}
+                      onChange={(e) => {
+                        setItemTypeToAdd(e.target.value as any);
+                        setSelectedCatalogItemId('');
+                      }}
+                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-800 dark:text-white cursor-pointer"
+                    >
+                      <option value="servizio">🛠️ Servizio</option>
+                      <option value="prodotto">🛍️ Prodotto</option>
+                      <option value="piatto">🍽️ Menù / Piatto</option>
+                    </select>
+
+                    <select
+                      value={selectedCatalogItemId}
+                      onChange={(e) => setSelectedCatalogItemId(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white cursor-pointer"
+                    >
+                      <option value="">-- Seleziona dal catalogo completo --</option>
+                      {itemTypeToAdd === 'servizio' &&
+                        availableServizi.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.titolo} • € {Number(s.prezzo).toFixed(2)} ({s.tempo_minuti} min){s.isCustomized ? ' 🌟' : ''}
+                          </option>
+                        ))}
+                      {itemTypeToAdd === 'prodotto' &&
+                        prodotti.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.titolo} • € {Number(p.prezzo_listino || p.prezzo_nuovo).toFixed(2)}
+                          </option>
+                        ))}
+                      {itemTypeToAdd === 'piatto' &&
+                        piatti.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.titolo} • € {Number(p.prezzo).toFixed(2)}
+                          </option>
+                        ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      disabled={!selectedCatalogItemId}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Aggiungi
+                    </button>
+                  </div>
+                </details>
               </div>
 
               {/* Tabella / Lista degli item aggiunti */}

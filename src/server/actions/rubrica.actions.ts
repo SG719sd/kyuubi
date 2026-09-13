@@ -3,11 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { RubricaService } from '@/server/services/rubrica.service';
 import { RubricaInput } from '@/lib/validations/rubrica';
-import { requireHubAdmin } from '@/server/auth/context';
+import { requireHubAdmin, requireHubMember } from '@/server/auth/context';
 
 export async function createRubricaAction(data: RubricaInput, hubSlug: string) {
   try {
-    await requireHubAdmin(hubSlug);
+    await requireHubMember(hubSlug);
     const result = await RubricaService.createContatto(data);
     revalidatePath(`/dashboard/hubs/${hubSlug}/rubrica`);
     return { success: true, data: result };
@@ -22,7 +22,7 @@ export async function updateRubricaAction(
   hubSlug: string
 ) {
   try {
-    await requireHubAdmin(hubSlug);
+    await requireHubMember(hubSlug);
     const result = await RubricaService.updateContatto(id, data);
     revalidatePath(`/dashboard/hubs/${hubSlug}/rubrica`);
     return { success: true, data: result };

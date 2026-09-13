@@ -54,7 +54,8 @@ export async function getHubContext(slugHub?: string): Promise<HubContext | null
     if (!prof) return null;
 
     const isBooleanoAdmin = Boolean(prof.admin);
-    const hasWritePermissions = isBooleanoAdmin || (prof.ruolo ? prof.ruolo.toLowerCase() === 'admin' : false);
+    const ruoloLower = prof.ruolo ? prof.ruolo.toLowerCase() : '';
+    const hasWritePermissions = isBooleanoAdmin || ['admin', 'titolare', 'owner', 'gestore'].includes(ruoloLower);
 
     return {
       userId: user.id,
@@ -77,7 +78,8 @@ export async function getHubContext(slugHub?: string): Promise<HubContext | null
 
   if (hubId && profId && ruolo && adminHeader !== null) {
     const isBooleanoAdmin = adminHeader === 'true';
-    const hasWritePermissions = isBooleanoAdmin || ruolo.toLowerCase() === 'admin';
+    const ruoloLower = ruolo.toLowerCase();
+    const hasWritePermissions = isBooleanoAdmin || ['admin', 'titolare', 'owner', 'gestore'].includes(ruoloLower);
 
     return {
       userId: user.id,
@@ -91,6 +93,16 @@ export async function getHubContext(slugHub?: string): Promise<HubContext | null
   }
 
   return null;
+}
+
+export async function requireHubMember(slugHub: string): Promise<HubContext> {
+  const ctx = await getHubContext(slugHub);
+
+  if (!ctx) {
+    throw new Error('UNAUTHORIZED: Utente non autenticato o non associato all\'Hub');
+  }
+
+  return ctx;
 }
 
 export async function requireHubAdmin(slugHub: string): Promise<HubContext> {
