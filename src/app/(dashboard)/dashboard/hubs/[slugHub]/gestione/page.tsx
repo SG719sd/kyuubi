@@ -29,7 +29,8 @@ export default async function GestioneHubPage({ params }: GestioneHubPageProps) 
 
   const rawData = await HubService.getHubWithProfessionista(slugHub, user.id);
 
-  if (!rawData || !rawData.hub) {
+  // Accesso consentito SOLO se l'utente è associato come professionista a questo Hub
+  if (!rawData || !rawData.hub || !rawData.professionista) {
     notFound();
   }
 

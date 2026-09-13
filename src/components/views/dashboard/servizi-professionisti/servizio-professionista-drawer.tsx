@@ -105,14 +105,14 @@ export default function ServizioProfessionistaDrawer({
         onClick={onClose} 
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white dark:bg-slate-900 shadow-2xl flex flex-col justify-between border-l border-slate-200 dark:border-slate-800">
+      <div className="fixed inset-y-0 right-0 max-w-full flex sm:pl-10">
+        <div className="w-full sm:w-screen max-w-full sm:max-w-md bg-white dark:bg-slate-900 shadow-2xl flex flex-col justify-between border-l border-slate-200 dark:border-slate-800">
           
           {/* Header */}
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/50">
+          <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/50">
             <div>
               <h2 className="font-bold text-slate-900 dark:text-white text-base tracking-tight flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 Personalizza {servizio.titolo}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -121,14 +121,14 @@ export default function ServizioProfessionistaDrawer({
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all"
+              className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           {/* Form */}
-          <form id="prof-servizio-form" onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+          <form id="prof-servizio-form" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 text-xs">
             {errorMsg && (
               <div className="p-3.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 rounded-2xl font-medium">
                 {errorMsg}
@@ -211,25 +211,25 @@ export default function ServizioProfessionistaDrawer({
           </form>
 
           {/* Footer */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex justify-between items-center">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-between gap-2.5">
             {custom ? (
               <button
                 type="button"
                 onClick={handleReset}
                 disabled={isPending}
-                className="px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl font-semibold transition-all flex items-center gap-1.5"
+                className="px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl font-semibold transition-all flex items-center gap-1.5 shrink-0"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Ripristina Default
+                <span className="hidden xs:inline">Ripristina Default</span>
               </button>
             ) : <div />}
 
-            <div className="flex gap-2.5">
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isPending}
-                className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-white dark:hover:bg-slate-800 transition-all disabled:opacity-50"
+                className="flex-1 sm:flex-none px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-white dark:hover:bg-slate-800 transition-all disabled:opacity-50 text-center"
               >
                 Annulla
               </button>
@@ -237,7 +237,7 @@ export default function ServizioProfessionistaDrawer({
                 type="submit"
                 form="prof-servizio-form"
                 disabled={isPending}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-xs transition-all disabled:opacity-50"
+                className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-xs transition-all disabled:opacity-50 text-center"
               >
                 {isPending ? 'Salvataggio...' : 'Salva'}
               </button>

@@ -186,13 +186,13 @@ export default function ProfessionistaDrawer({
         onClick={onClose}
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white dark:bg-slate-900 shadow-2xl flex flex-col justify-between border-l border-slate-200 dark:border-slate-800">
+      <div className="fixed inset-y-0 right-0 max-w-full flex sm:pl-10">
+        <div className="w-full sm:w-screen max-w-full sm:max-w-md bg-white dark:bg-slate-900 shadow-2xl flex flex-col justify-between border-l border-slate-200 dark:border-slate-800">
           {/* Header */}
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/50">
+          <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/50">
             <div>
               <h2 className="font-bold text-slate-900 dark:text-white text-base tracking-tight flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 {initialData
                   ? "Modifica Professionista"
                   : "Nuovo Professionista"}
@@ -203,7 +203,7 @@ export default function ProfessionistaDrawer({
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all"
+              className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -213,7 +213,7 @@ export default function ProfessionistaDrawer({
           <form
             id="prof-form"
             onSubmit={handleSubmit}
-            className="p-6 space-y-4 overflow-y-auto flex-1"
+            className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1"
           >
             {errorMsg && (
               <div className="p-3.5 text-xs bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-400 rounded-2xl font-medium">
@@ -222,12 +222,12 @@ export default function ProfessionistaDrawer({
             )}
 
             {/* Avatar Preview & Upload */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl">
+            <div className="p-3.5 sm:p-4 bg-slate-50 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800 rounded-2xl">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
                 Avatar Professionista
               </label>
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
                   {imagePreview ? (
                     <img
                       src={imagePreview}
@@ -238,12 +238,12 @@ export default function ProfessionistaDrawer({
                     <User className="w-7 h-7 text-slate-400 dark:text-slate-600" />
                   )}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0 w-full">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleImageChange}
-                    className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-950/60 dark:file:text-indigo-400 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/60 cursor-pointer transition-all"
+                    className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-950/60 dark:file:text-indigo-400 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/60 cursor-pointer transition-all"
                   />
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
                     Verrà convertita in formato WebP automaticamente.
@@ -349,7 +349,7 @@ export default function ProfessionistaDrawer({
 
             {/* Toggle Flags */}
             <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-5">
-              <label className="flex justify-between items-center cursor-pointer select-none">
+              <label className="flex justify-between items-center cursor-pointer select-none py-1 gap-3">
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Ruolo Amministratore
                 </span>
@@ -359,10 +359,10 @@ export default function ProfessionistaDrawer({
                   onChange={(e) =>
                     setForm({ ...form, admin: e.target.checked })
                   }
-                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500 shrink-0"
                 />
               </label>
-              <label className="flex justify-between items-center cursor-pointer select-none">
+              <label className="flex justify-between items-center cursor-pointer select-none py-1 gap-3">
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Visibile nel profilo
                 </span>
@@ -372,10 +372,10 @@ export default function ProfessionistaDrawer({
                   onChange={(e) =>
                     setForm({ ...form, is_visible: e.target.checked })
                   }
-                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500 shrink-0"
                 />
               </label>
-              <label className="flex justify-between items-center cursor-pointer select-none">
+              <label className="flex justify-between items-center cursor-pointer select-none py-1 gap-3">
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Utente Attivo
                 </span>
@@ -385,10 +385,10 @@ export default function ProfessionistaDrawer({
                   onChange={(e) =>
                     setForm({ ...form, is_active: e.target.checked })
                   }
-                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500 shrink-0"
                 />
               </label>
-              <label className="flex justify-between items-center cursor-pointer select-none">
+              <label className="flex justify-between items-center cursor-pointer select-none py-1 gap-3">
                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Segna come Preferito
                 </span>
@@ -398,19 +398,19 @@ export default function ProfessionistaDrawer({
                   onChange={(e) =>
                     setForm({ ...form, preferito: e.target.checked })
                   }
-                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500"
+                  className="w-4 h-4 text-indigo-600 rounded-md border-slate-300 dark:border-slate-700 dark:bg-slate-900 focus:ring-indigo-500 shrink-0"
                 />
               </label>
             </div>
           </form>
 
           {/* Footer Actions */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex justify-end gap-2.5">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
               disabled={isPending}
-              className="px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-none px-4 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-white dark:hover:bg-slate-800 transition-all disabled:opacity-50 text-center"
             >
               Annulla
             </button>
@@ -418,7 +418,7 @@ export default function ProfessionistaDrawer({
               type="submit"
               form="prof-form"
               disabled={isPending}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-none px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all disabled:opacity-50 text-center"
             >
               {isPending ? "Salvataggio..." : "Salva Modifiche"}
             </button>
