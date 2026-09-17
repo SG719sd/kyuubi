@@ -20,6 +20,9 @@ import {
   Search,
   UserPlus,
   CheckCircle2,
+  ShieldCheck,
+  UserMinus,
+  Undo2,
 } from 'lucide-react';
 import {
   upsertPrenotazioneAction,
@@ -94,6 +97,7 @@ export default function PrenotazioneDrawer({
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
   const [showQuickAddClient, setShowQuickAddClient] = useState(false);
   const [quickClientSuccessMsg, setQuickClientSuccessMsg] = useState<string | null>(null);
+  const [removedClient, setRemovedClient] = useState<any | null>(null);
 
   // Quick Add Client form state
   const [quickNome, setQuickNome] = useState('');
@@ -137,6 +141,7 @@ export default function PrenotazioneDrawer({
     setShowQuickAddClient(false);
     setQuickError(null);
     setItemSearchQuery('');
+    setRemovedClient(null);
 
     if (initialData) {
       setSelectedClienteId(initialData.id_rubrica || null);
@@ -259,16 +264,46 @@ export default function PrenotazioneDrawer({
     }));
   }, [selectedStaffId, professionistiServizi, servizi]);
 
-  // Cliente attualmente collegato o selezionato
+  // Cliente attualmente collegato o selezionato (strettamente nullo se deselezionato/rimosso)
   const currentClient = useMemo(() => {
-    if (selectedClienteId) {
-      return clientiList.find((c) => c.id === selectedClienteId) || null;
-    }
-    if (initialData?.rubrica) {
+    if (!selectedClienteId) return null;
+    const foundInList = clientiList.find((c) => c.id === selectedClienteId);
+    if (foundInList) return foundInList;
+    if (initialData?.rubrica && initialData.rubrica.id === selectedClienteId) {
       return initialData.rubrica;
     }
     return null;
   }, [selectedClienteId, clientiList, initialData]);
+
+  // Gestione rimozione e cambio cliente con supporto a ripristino immediato
+  const handleRemoveClient = () => {
+    if (currentClient) {
+      setRemovedClient(currentClient);
+    }
+    setSelectedClienteId(null);
+    setClientSearchQuery('');
+    setIsClientSearchOpen(false);
+  };
+
+  const handleStartChangeClient = () => {
+    if (currentClient) {
+      setRemovedClient(currentClient);
+    }
+    setSelectedClienteId(null);
+    setClientSearchQuery('');
+    setIsClientSearchOpen(true);
+  };
+
+  const handleRestoreClient = (clientToRestore: any) => {
+    if (!clientToRestore) return;
+    setSelectedClienteId(clientToRestore.id);
+    setRemovedClient(null);
+    setIsClientSearchOpen(false);
+    setClientSearchQuery('');
+    if (!titolo.trim() || titolo.trim() === 'Prenotazione') {
+      setTitolo(`${clientToRestore.nome} ${clientToRestore.cognome || ''}`.trim());
+    }
+  };
 
   // Ricerca live clienti (Autocompiler utenti)
   const filteredClienti = useMemo(() => {
@@ -646,16 +681,20 @@ export default function PrenotazioneDrawer({
     // Customer name default for title if not typed
     let generatedTitle = titolo.trim();
     if (!generatedTitle) {
-      if (selectedClienteId) {
-        const cli = clienti.find((c) => c.id === selectedClienteId);
-        if (cli) generatedTitle = `${senzaOrario ? 'Ordine' : 'Prenotazione'}: ${cli.nome} ${cli.cognome || ''}`.trim();
-      } else {
+      if (currentClient) {
+        generatedTitle = `${currentClient.nome} ${currentClient.cognome || ''}`.trim();
+      } else if (items.length > 0) {
         generatedTitle = `${senzaOrario ? 'Ordine' : 'Prenotazione'} ${items[0].titolo}`;
+      } else {
+        generatedTitle = 'Prenotazione';
       }
     }
 
-    const selectedCliente = selectedClienteId ? clienti.find((c) => c.id === selectedClienteId) : null;
-    const resolvedUserId = selectedCliente?.id_user || initialData?.id_user || null;
+    const selectedCliente = selectedClienteId
+      ? clientiList.find((c) => c.id === selectedClienteId) ||
+        (initialData?.rubrica?.id === selectedClienteId ? initialData.rubrica : null)
+      : null;
+    const resolvedUserId = selectedCliente ? (selectedCliente.id_user || null) : null;
 
     const payload = {
       id: initialData ? initialData.id : undefined,
@@ -742,12 +781,40 @@ export default function PrenotazioneDrawer({
             <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
               <CalendarCheck className="w-5 h-5" />
             </div>
-            <div className="truncate">
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white truncate">
-                {initialData ? 'Dettagli & Modifica Prenotazione' : 'Nuova Prenotazione'}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                {initialData ? `ID #${initialData.id}` : 'Inserisci i dettagli e gli slot orari'}
+            <div className="truncate min-w-0">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-white truncate">
+                  {currentClient
+                    ? `${currentClient.nome} ${currentClient.cognome || ''}`.trim()
+                    : (titolo.trim() || (initialData ? `Prenotazione #${initialData.id}` : 'Nuova Prenotazione'))}
+                </h2>
+                {initialData && (
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">
+                    #{initialData.id}
+                  </span>
+                )}
+                {currentClient ? (
+                  currentClient.id_user ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0 shadow-2xs">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      <span>Account Registrato</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0 shadow-2xs">
+                      <UserPlus className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      <span>Registrato a mano</span>
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">
+                    <User className="w-3 h-3" />
+                    <span>Nessun cliente</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                {dateStr ? `${dateStr}` : ''} {!senzaOrario && timeStr ? `• Ore ${timeStr}` : '• Senza orario'}
+                {items.length > 0 ? ` • ${items.length} ${items.length === 1 ? 'elemento' : 'elementi'}` : ''}
               </p>
             </div>
           </div>
@@ -781,40 +848,72 @@ export default function PrenotazioneDrawer({
 
             {/* SEZIONE CLIENTE & OPERATORE */}
             {currentClient ? (
-              /* CARD CLIENTE SELEZIONATO CON CONTATTI RAPIDI */
+              /* CARD CLIENTE SELEZIONATO CON CONTATTI RAPIDI & DISTINZIONE IDENTITÀ */
               <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm uppercase shadow-xs shrink-0 mt-0.5">
                       {currentClient.nome?.charAt(0) || 'C'}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-extrabold text-slate-900 dark:text-white">
                           {currentClient.nome} {currentClient.cognome || ''}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
-                          In Rubrica
-                        </span>
+                        {currentClient.id_user ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs"
+                            title="Utente registrato su Kyuubi con account autonomo"
+                          >
+                            <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                            <span>Account Registrato</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shadow-2xs"
+                            title="Persona registrata a mano dallo staff in rubrica"
+                          >
+                            <UserPlus className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                            <span>Registrato a mano dallo staff</span>
+                          </span>
+                        )}
                       </div>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {currentClient.id_user
+                          ? 'Account cliente Kyuubi collegato: riceve le conferme e visualizza la prenotazione nel suo profilo.'
+                          : "Scheda anagrafica interna in rubrica inserita dallo staff."}
+                      </p>
+
                       {currentClient.note && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-xs">
-                          {currentClient.note}
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 italic mt-1 bg-white/60 dark:bg-slate-900/60 p-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/40">
+                          "{currentClient.note}"
                         </p>
                       )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedClienteId(null);
-                      setClientSearchQuery('');
-                      setIsClientSearchOpen(false);
-                    }}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Cambia / Rimuovi
-                  </button>
+
+                  {/* Pulsanti Cambia e Rimuovi dedicati */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleStartChangeClient}
+                      className="px-2.5 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                      title="Sostituisci questo cliente con un altro"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Cambia</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveClient}
+                      className="px-2.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                      title="Scollega questo cliente dalla prenotazione"
+                    >
+                      <UserMinus className="w-3.5 h-3.5" />
+                      <span>Rimuovi</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Pulsanti azioni rapide di contatto */}
@@ -1005,106 +1104,147 @@ export default function PrenotazioneDrawer({
               </div>
             ) : (
               /* RICERCA INTELLIGENTE / AUTOCOMPILER CLIENTE DA RUBRICA + OPERATORE */
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Autocompiler Ricerca Cliente */}
-                <div className="space-y-1.5 relative">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      Cerca Cliente in Rubrica
-                    </label>
+              <div className="space-y-4">
+                {/* Banner di ripristino istantaneo se un cliente era appena stato rimosso/scollegato */}
+                {removedClient && (
+                  <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 flex items-center justify-between gap-2 text-xs text-amber-900 dark:text-amber-200 animate-fade-in">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center font-bold text-[11px] shrink-0">
+                        {removedClient.nome?.charAt(0) || 'C'}
+                      </div>
+                      <div className="truncate">
+                        <span className="font-extrabold">{removedClient.nome} {removedClient.cognome || ''}</span>
+                        <span className="ml-1 opacity-75">è stato rimosso dalla prenotazione.</span>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={handleOpenQuickAdd}
-                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      onClick={() => handleRestoreClient(removedClient)}
+                      className="px-2.5 py-1 text-xs font-bold bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 rounded-xl transition-all cursor-pointer shrink-0 flex items-center gap-1 shadow-2xs"
                     >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      <span>+ Aggiungi in Rubrica</span>
+                      <Undo2 className="w-3.5 h-3.5" />
+                      <span>Annulla / Ripristina</span>
                     </button>
                   </div>
+                )}
 
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Digita nome, cognome o telefono..."
-                      value={clientSearchQuery}
-                      onChange={(e) => {
-                        setClientSearchQuery(e.target.value);
-                        setIsClientSearchOpen(true);
-                      }}
-                      onFocus={() => setIsClientSearchOpen(true)}
-                      className="w-full pl-8 pr-8 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
-                    {clientSearchQuery && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Autocompiler Ricerca Cliente */}
+                  <div className="space-y-1.5 relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        Cerca Cliente in Rubrica
+                      </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          setClientSearchQuery('');
-                          setIsClientSearchOpen(false);
-                        }}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        onClick={handleOpenQuickAdd}
+                        className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>+ Aggiungi in Rubrica</span>
                       </button>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Dropdown Live Risultati Autocompiler */}
-                  {isClientSearchOpen && (
-                    <div className="absolute left-0 right-0 z-30 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
-                      {filteredClienti.length > 0 ? (
-                        <div className="py-1">
-                          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-950/60 border-b border-slate-100 dark:border-slate-800">
-                            Clienti trovati ({filteredClienti.length})
-                          </div>
-                          {filteredClienti.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedClienteId(c.id);
-                                if (!titolo.trim()) {
-                                  setTitolo(`${c.nome} ${c.cognome || ''}`.trim());
-                                }
-                                setIsClientSearchOpen(false);
-                                setClientSearchQuery('');
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/50 flex items-center justify-between gap-2 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800/40 last:border-0"
-                            >
-                              <div className="min-w-0">
-                                <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
-                                  {c.nome} {c.cognome || ''}
-                                </span>
-                                {c.telefono && (
-                                  <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                    <Phone className="w-3 h-3 text-slate-400" />
-                                    {c.telefono}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold shrink-0">
-                                Collega
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-3 text-center space-y-2">
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Nessun contatto trovato con &quot;{clientSearchQuery}&quot;
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleOpenQuickAdd}
-                            className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            <span>+ Aggiungi subito in Rubrica</span>
-                          </button>
-                        </div>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Digita nome, cognome o telefono..."
+                        value={clientSearchQuery}
+                        onChange={(e) => {
+                          setClientSearchQuery(e.target.value);
+                          setIsClientSearchOpen(true);
+                        }}
+                        onFocus={() => setIsClientSearchOpen(true)}
+                        className="w-full pl-8 pr-8 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      />
+                      {clientSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClientSearchQuery('');
+                            setIsClientSearchOpen(false);
+                          }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       )}
+                    </div>
+
+                    {/* Dropdown Live Risultati Autocompiler */}
+                    {isClientSearchOpen && (
+                      <div className="absolute left-0 right-0 z-30 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden max-h-56 overflow-y-auto">
+                        {filteredClienti.length > 0 ? (
+                          <div className="py-1">
+                            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-950/60 border-b border-slate-100 dark:border-slate-800">
+                              Clienti trovati ({filteredClienti.length})
+                            </div>
+                            {filteredClienti.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedClienteId(c.id);
+                                  setRemovedClient(null);
+                                  if (
+                                    !titolo.trim() ||
+                                    titolo.trim() === 'Prenotazione' ||
+                                    (removedClient && titolo.trim() === `${removedClient.nome} ${removedClient.cognome || ''}`.trim())
+                                  ) {
+                                    setTitolo(`${c.nome} ${c.cognome || ''}`.trim());
+                                  }
+                                  setIsClientSearchOpen(false);
+                                  setClientSearchQuery('');
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/50 flex items-center justify-between gap-2 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800/40 last:border-0"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                      {c.nome} {c.cognome || ''}
+                                    </span>
+                                    {c.id_user ? (
+                                      <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                                        <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                                        Account
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shrink-0">
+                                        <UserPlus className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                        Manuale
+                                      </span>
+                                    )}
+                                  </div>
+                                  {c.telefono && (
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                                      <Phone className="w-3 h-3 text-slate-400" />
+                                      {c.telefono}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold shrink-0">
+                                  Collega
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-3 text-center space-y-2">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Nessun contatto trovato con &quot;{clientSearchQuery}&quot;
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleOpenQuickAdd}
+                              className="w-full px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>+ Aggiungi subito in Rubrica</span>
+                            </button>
+                          </div>
+                        )}
 
                       {/* Helper per chiudere o usare come titolo libero */}
                       <div className="p-2 bg-slate-50 dark:bg-slate-950/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
@@ -1157,7 +1297,8 @@ export default function PrenotazioneDrawer({
                 </div>
 
               </div>
-            )}
+            </div>
+          )}
 
             {/* Titolo e Stato */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

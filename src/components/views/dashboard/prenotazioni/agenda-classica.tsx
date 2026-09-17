@@ -15,6 +15,8 @@ import {
   CheckCircle,
   AlertCircle,
   UtensilsCrossed,
+  ShieldCheck,
+  UserPlus,
 } from 'lucide-react';
 import { PrenotazioneWithDetails } from '@/server/repositories/prenotazioni.repository';
 import { upsertPrenotazioneAction } from '@/server/actions/prenotazioni.actions';
@@ -835,12 +837,27 @@ export default function AgendaClassica({
                             {order.stato}
                           </span>
                         </div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {order.titolo || clientName}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                          {clientName}
-                        </p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {order.rubrica?.id_user ? (
+                            <span title="Account Registrato Autonomo">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            </span>
+                          ) : order.rubrica ? (
+                            <span title="Registrato a mano dallo staff">
+                              <UserPlus className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            </span>
+                          ) : (
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          )}
+                          <h4 className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                            {clientName}
+                          </h4>
+                        </div>
+                        {order.titolo && order.titolo !== clientName && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {order.titolo}
+                          </p>
+                        )}
                       </div>
 
                       <div className="text-right shrink-0">
@@ -1170,8 +1187,17 @@ export default function AgendaClassica({
                                     <span className="font-black font-mono px-1 py-0.5 rounded bg-white/90 dark:bg-slate-900/90 border border-slate-200/60 dark:border-slate-700/60 text-[9px] shrink-0">
                                       {span.displayStart} - {span.displayEnd}
                                     </span>
+                                    {b.rubrica?.id_user ? (
+                                      <span title="Account Registrato Autonomamente">
+                                        <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                      </span>
+                                    ) : b.rubrica ? (
+                                      <span title="Registrato a mano in rubrica dallo staff">
+                                        <UserPlus className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                      </span>
+                                    ) : null}
                                     <span className="truncate text-slate-900 dark:text-slate-100 font-extrabold">
-                                      {b.titolo || clientName}
+                                      {clientName} {b.titolo && b.titolo !== clientName ? `• ${b.titolo}` : ''}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0 text-[9px] font-mono opacity-80">
@@ -1214,8 +1240,24 @@ export default function AgendaClassica({
                                   </div>
 
                                   <div className="flex items-center justify-between gap-1 mt-0.5">
-                                    <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100">
-                                      {b.titolo || clientName}
+                                    <div className="min-w-0">
+                                      <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                                        {b.rubrica?.id_user ? (
+                                          <span title="Account Registrato Autonomamente">
+                                            <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          </span>
+                                        ) : b.rubrica ? (
+                                          <span title="Registrato a mano in rubrica dallo staff">
+                                            <UserPlus className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                          </span>
+                                        ) : null}
+                                        <span className="truncate">{clientName}</span>
+                                      </div>
+                                      {b.titolo && b.titolo !== clientName && (
+                                        <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                          {b.titolo}
+                                        </div>
+                                      )}
                                     </div>
                                     <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 shrink-0 font-mono">
                                       €{Number(b.totale || 0).toFixed(0)}
@@ -1239,13 +1281,23 @@ export default function AgendaClassica({
                                       </div>
                                     </div>
 
-                                    <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100">
-                                      {b.titolo || clientName}
+                                    <div className="font-extrabold text-xs leading-tight truncate text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                                      {b.rubrica?.id_user ? (
+                                        <span title="Account Registrato Autonomamente">
+                                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        </span>
+                                      ) : b.rubrica ? (
+                                        <span title="Registrato a mano in rubrica dallo staff">
+                                          <UserPlus className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                        </span>
+                                      ) : null}
+                                      <span className="truncate">{clientName}</span>
                                     </div>
-                                    <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                                      <User className="w-2.5 h-2.5 shrink-0" />
-                                      <span>{clientName}</span>
-                                    </div>
+                                    {b.titolo && b.titolo !== clientName && (
+                                      <div className="text-[11px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                                        {b.titolo}
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div className="mt-1.5 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between">
@@ -1576,8 +1628,17 @@ export default function AgendaClassica({
                                     <span className="font-black font-mono text-[9px] shrink-0 text-slate-800 dark:text-slate-200">
                                       {span.displayStart}
                                     </span>
+                                    {b.rubrica?.id_user ? (
+                                      <span title="Account Registrato">
+                                        <ShieldCheck className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                      </span>
+                                    ) : b.rubrica ? (
+                                      <span title="Registrato a mano dallo staff">
+                                        <UserPlus className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                                      </span>
+                                    ) : null}
                                     <span className="truncate text-slate-900 dark:text-slate-100 font-extrabold text-[10px]">
-                                      {b.titolo || clientName}
+                                      {clientName}
                                     </span>
                                   </div>
                                   <span className="text-[9px] opacity-75 shrink-0 font-mono">
@@ -1597,12 +1658,21 @@ export default function AgendaClassica({
                                     </span>
                                   </div>
 
-                                  <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100">
-                                    {b.titolo || clientName}
+                                  <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                                    {b.rubrica?.id_user ? (
+                                      <span title="Account Registrato">
+                                        <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                      </span>
+                                    ) : b.rubrica ? (
+                                      <span title="Registrato a mano dallo staff">
+                                        <UserPlus className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                      </span>
+                                    ) : null}
+                                    <span className="truncate">{clientName}</span>
                                   </div>
 
                                   <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate flex items-center justify-between leading-none">
-                                    <span className="truncate">{clientName}</span>
+                                    <span className="truncate opacity-75">{b.titolo && b.titolo !== clientName ? b.titolo : ''}</span>
                                     <span className="font-bold text-[9px] text-slate-800 dark:text-slate-200 font-mono">
                                       €{Number(b.totale || 0).toFixed(0)}
                                     </span>
@@ -1645,12 +1715,23 @@ export default function AgendaClassica({
                                       </div>
                                     )}
 
-                                    <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100">
-                                      {b.titolo || clientName}
+                                    <div className="font-extrabold text-[11px] leading-tight truncate text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                                      {b.rubrica?.id_user ? (
+                                        <span title="Account Registrato">
+                                          <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        </span>
+                                      ) : b.rubrica ? (
+                                        <span title="Registrato a mano dallo staff">
+                                          <UserPlus className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                        </span>
+                                      ) : null}
+                                      <span className="truncate">{clientName}</span>
                                     </div>
-                                    <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
-                                      {clientName}
-                                    </div>
+                                    {b.titolo && b.titolo !== clientName && (
+                                      <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                                        {b.titolo}
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div className="mt-1 pt-1 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between text-[10px]">
