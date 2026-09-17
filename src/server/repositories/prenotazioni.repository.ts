@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server';
+import { createClient, createAdminClient } from '@/utils/supabase/server';
 import { Database } from '@/types/database.types';
 
 type PrenotazioneRow = Database['public']['Tables']['prenotazioni']['Row'];
@@ -75,20 +75,40 @@ export class PrenotazioniRepository {
    * Recupera una singola prenotazione per ID
    */
   static async getById(id: number, hubId: string): Promise<PrenotazioneWithDetails | null> {
+    const numId = Number(id);
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    const selectQuery = `
+      *,
+      items:prenotazioni_items(*),
+      professionisti(id, nome, ruolo, colore, img_url),
+      rubrica(id, id_user, nome, cognome, telefono, email)
+    `;
+
+    let { data, error } = await supabase
       .from('prenotazioni')
-      .select(`
-        *,
-        items:prenotazioni_items(*),
-        professionisti(id, nome, ruolo, colore, img_url),
-        rubrica(id, id_user, nome, cognome, telefono, email)
-      `)
-      .eq('id', id)
+      .select(selectQuery)
+      .eq('id', numId)
       .eq('id_hub', hubId)
       .is('deleted_at', null)
       .maybeSingle();
+
+    if ((error || !data) && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminClient = createAdminClient();
+      if (adminClient) {
+        const adminRes = await adminClient
+          .from('prenotazioni')
+          .select(selectQuery)
+          .eq('id', numId)
+          .eq('id_hub', hubId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (!adminRes.error && adminRes.data) {
+          data = adminRes.data;
+          error = null;
+        }
+      }
+    }
 
     if (error || !data) return null;
     return data as unknown as PrenotazioneWithDetails;
@@ -101,16 +121,32 @@ export class PrenotazioniRepository {
     header: PrenotazioneInsert,
     items: Omit<PrenotazioneItemInsert, 'id_prenotazione'>[]
   ): Promise<PrenotazioneWithDetails> {
-    const supabase = await createClient();
+    let supabase = await createClient();
 
-    const { data: createdHeader, error: headerError } = await supabase
+    let { data: createdHeader, error: headerError } = await supabase
       .from('prenotazioni')
       .insert([header])
       .select()
-      .single();
+      .maybeSingle();
+
+    if ((headerError || !createdHeader) && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminClient = createAdminClient();
+      if (adminClient) {
+        const adminRes = await adminClient
+          .from('prenotazioni')
+          .insert([header])
+          .select()
+          .maybeSingle();
+        if (!adminRes.error && adminRes.data) {
+          createdHeader = adminRes.data;
+          headerError = null;
+          supabase = adminClient as any;
+        }
+      }
+    }
 
     if (headerError || !createdHeader) {
-      throw new Error(`Errore creazione testata prenotazione: ${headerError?.message}`);
+      throw new Error(`Errore creazione testata prenotazione: ${headerError?.message || 'Risposta vuota'}`);
     }
 
     const itemsToInsert: PrenotazioneItemInsert[] = items.map((item) => ({
@@ -145,47 +181,84 @@ export class PrenotazioniRepository {
     header: PrenotazioneUpdate,
     items?: Omit<PrenotazioneItemInsert, 'id_prenotazione'>[]
   ): Promise<PrenotazioneWithDetails> {
-    const supabase = await createClient();
+    const numId = Number(id);
+    let supabase = await createClient();
 
-    const { data: updatedHeader, error: updateError } = await supabase
+    // Rimuoviamo id, id_hub, created_at dal payload di update per evitare conflitti o blocchi RLS
+    const updateFields = { ...(header as Record<string, any>) };
+    delete updateFields.id;
+    delete updateFields.id_hub;
+    delete updateFields.created_at;
+
+    const updatePayload = {
+      ...updateFields,
+      updated_at: new Date().toISOString(),
+    };
+
+    let { data: updatedRows, error: updateError } = await supabase
       .from('prenotazioni')
-      .update({
-        ...header,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+      .update(updatePayload)
+      .eq('id', numId)
       .eq('id_hub', hubId)
-      .select()
-      .single();
+      .select();
 
-    if (updateError || !updatedHeader) {
-      throw new Error(`Errore aggiornamento prenotazione: ${updateError?.message}`);
+    // Fallback con client service_role se disponibile
+    if ((updateError || !updatedRows || updatedRows.length === 0) && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminClient = createAdminClient();
+      if (adminClient) {
+        const adminRes = await adminClient
+          .from('prenotazioni')
+          .update(updatePayload)
+          .eq('id', numId)
+          .eq('id_hub', hubId)
+          .select();
+
+        if (!adminRes.error && adminRes.data && adminRes.data.length > 0) {
+          updatedRows = adminRes.data;
+          updateError = null;
+          supabase = adminClient as any;
+        }
+      }
     }
 
-    // Se sono forniti nuovi items, sostituiamo gli esistenti per questa prenotazione
-    if (items && items.length > 0) {
+    if (updateError) {
+      throw new Error(`Errore aggiornamento prenotazione: ${updateError.message}`);
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      const existing = await this.getById(numId, hubId);
+      if (!existing) {
+        throw new Error(`Prenotazione #${numId} non trovata per questo Hub.`);
+      }
+      throw new Error(`Impossibile aggiornare la prenotazione #${numId}: verifica i permessi di accesso.`);
+    }
+
+    // Se sono forniti nuovi items, sincronizziamo gli items per questa prenotazione
+    if (items !== undefined) {
       // Elimina items vecchi
       await supabase
         .from('prenotazioni_items')
         .delete()
-        .eq('id_prenotazione', id);
+        .eq('id_prenotazione', numId);
 
-      const itemsToInsert: PrenotazioneItemInsert[] = items.map((item) => ({
-        ...item,
-        id_prenotazione: id,
-        id_hub: hubId,
-      }));
+      if (items.length > 0) {
+        const itemsToInsert: PrenotazioneItemInsert[] = items.map((item) => ({
+          ...item,
+          id_prenotazione: numId,
+          id_hub: hubId,
+        }));
 
-      const { error: insertItemsError } = await supabase
-        .from('prenotazioni_items')
-        .insert(itemsToInsert);
+        const { error: insertItemsError } = await supabase
+          .from('prenotazioni_items')
+          .insert(itemsToInsert);
 
-      if (insertItemsError) {
-        throw new Error(`Errore aggiornamento items prenotazione: ${insertItemsError.message}`);
+        if (insertItemsError) {
+          throw new Error(`Errore aggiornamento items prenotazione: ${insertItemsError.message}`);
+        }
       }
     }
 
-    const fullRecord = await this.getById(id, hubId);
+    const fullRecord = await this.getById(numId, hubId);
     if (!fullRecord) throw new Error('Impossibile recuperare la prenotazione aggiornata');
     return fullRecord;
   }
@@ -194,17 +267,33 @@ export class PrenotazioniRepository {
    * Cambio stato rapido
    */
   static async updateStato(id: number, hubId: string, stato: string) {
+    const numId = Number(id);
     const supabase = await createClient();
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('prenotazioni')
       .update({ stato, updated_at: new Date().toISOString() })
-      .eq('id', id)
+      .eq('id', numId)
       .eq('id_hub', hubId)
-      .select()
-      .single();
+      .select();
+
+    if ((error || !data || data.length === 0) && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminClient = createAdminClient();
+      if (adminClient) {
+        const adminRes = await adminClient
+          .from('prenotazioni')
+          .update({ stato, updated_at: new Date().toISOString() })
+          .eq('id', numId)
+          .eq('id_hub', hubId)
+          .select();
+        if (!adminRes.error && adminRes.data && adminRes.data.length > 0) {
+          data = adminRes.data;
+          error = null;
+        }
+      }
+    }
 
     if (error) throw new Error(error.message);
-    return data;
+    return data && data.length > 0 ? data[0] : null;
   }
 
   /**

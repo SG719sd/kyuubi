@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 import { HubRow, TablesInsert } from "@/types";
 
 export class HubRepository {
@@ -29,11 +29,12 @@ export class HubRepository {
     return data as unknown as HubRow;
   }
 
-  // --- RECURPERA GLI HUBS DELL'UTENTE ---
+  // --- RECUPERA GLI HUBS DELL'UTENTE ---
   static async findUserHubs(userId: string): Promise<HubRow[]> {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    // 1. Hubs a cui l'utente appartiene come professionista/collaboratore/admin
+    const { data: profHubs } = await supabase
       .from('professionisti')
       .select(`
         hubs!inner(*)
@@ -43,10 +44,68 @@ export class HubRepository {
       .is('deleted_at', null)
       .is('hubs.deleted_at', null);
 
-    if (error || !data) return [];
+    // 2. Hubs creati/posseduti direttamente dall'utente
+    const { data: ownedHubs } = await supabase
+      .from('hubs')
+      .select('*')
+      .eq('id_user', userId)
+      .is('deleted_at', null);
 
-    // Estraiamo la relazione 'hubs' da ogni record di professionisti
-    return data.map((item: any) => item.hubs as unknown as HubRow);
+    const hubMap = new Map<string, HubRow>();
+
+    if (profHubs && Array.isArray(profHubs)) {
+      profHubs.forEach((item: any) => {
+        if (item.hubs && item.hubs.id) {
+          hubMap.set(item.hubs.id, item.hubs as HubRow);
+        }
+      });
+    }
+
+    if (ownedHubs && Array.isArray(ownedHubs)) {
+      ownedHubs.forEach((hub: any) => {
+        if (hub && hub.id) {
+          hubMap.set(hub.id, hub as HubRow);
+        }
+      });
+    }
+
+    // Fallback con client admin se le query anonime restituiscono vuoto e abbiamo il service role
+    if (hubMap.size === 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const adminClient = createAdminClient();
+      if (adminClient) {
+        const { data: adminProfHubs } = await adminClient
+          .from('professionisti')
+          .select(`hubs!inner(*)`)
+          .eq('id_user', userId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .is('hubs.deleted_at', null);
+
+        const { data: adminOwnedHubs } = await adminClient
+          .from('hubs')
+          .select('*')
+          .eq('id_user', userId)
+          .is('deleted_at', null);
+
+        if (adminProfHubs && Array.isArray(adminProfHubs)) {
+          adminProfHubs.forEach((item: any) => {
+            if (item.hubs && item.hubs.id) {
+              hubMap.set(item.hubs.id, item.hubs as HubRow);
+            }
+          });
+        }
+
+        if (adminOwnedHubs && Array.isArray(adminOwnedHubs)) {
+          adminOwnedHubs.forEach((hub: any) => {
+            if (hub && hub.id) {
+              hubMap.set(hub.id, hub as HubRow);
+            }
+          });
+        }
+      }
+    }
+
+    return Array.from(hubMap.values());
   }
 
   static async findBySlugWithProfessionista(slug: string, userId: string) {

@@ -153,9 +153,10 @@ create policy "Hub members can view rubrica" on public.rubrica
     for select using (public.is_hub_member(id_hub));
 
 drop policy if exists "Hub admins can manage rubrica" on public.rubrica;
-create policy "Hub admins can manage rubrica" on public.rubrica
-    for all using (public.is_hub_admin(id_hub))
-    with check (public.is_hub_admin(id_hub));
+drop policy if exists "Hub members can manage rubrica" on public.rubrica;
+create policy "Hub members can manage rubrica" on public.rubrica
+    for all using (public.is_hub_member(id_hub))
+    with check (public.is_hub_member(id_hub));
 
 -- ==============================================================================
 -- 11. POLICIES PER TABELLA PROFESSIONISTI SERVIZI
@@ -193,18 +194,18 @@ create policy "Users can view own prenotazioni" on public.prenotazioni
     for select using (id_user = auth.uid());
 
 drop policy if exists "Hub admins can manage all prenotazioni" on public.prenotazioni;
-create policy "Hub admins can manage all prenotazioni" on public.prenotazioni
-    for all using (public.is_hub_admin(id_hub))
-    with check (public.is_hub_admin(id_hub));
+create policy "Hub members can manage all prenotazioni" on public.prenotazioni
+    for all using (public.is_hub_member(id_hub))
+    with check (public.is_hub_member(id_hub));
 
 drop policy if exists "Hub members can view prenotazioni items" on public.prenotazioni_items;
 create policy "Hub members can view prenotazioni items" on public.prenotazioni_items
     for select using (public.is_hub_member(id_hub));
 
 drop policy if exists "Hub admins can manage prenotazioni items" on public.prenotazioni_items;
-create policy "Hub admins can manage prenotazioni items" on public.prenotazioni_items
-    for all using (public.is_hub_admin(id_hub))
-    with check (public.is_hub_admin(id_hub));
+create policy "Hub members can manage prenotazioni items" on public.prenotazioni_items
+    for all using (public.is_hub_member(id_hub))
+    with check (public.is_hub_member(id_hub));
 
 -- ==============================================================================
 -- 14. POLICIES PER TABELLA LOOKUP OPTIONS

@@ -40,3 +40,24 @@ export async function createHubWizardAction(
     };
   }
 }
+
+export async function getUserHubsAction(): Promise<ActionResponse<any[]>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Utente non autenticato.' };
+    }
+
+    const { HubService } = await import('../services/hub.service');
+    const hubs = await HubService.getUserHubs(user.id);
+    return { success: true, data: hubs };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Errore durante il caricamento degli Hub.',
+      data: [],
+    };
+  }
+}

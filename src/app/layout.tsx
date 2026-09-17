@@ -5,17 +5,19 @@ import { ThemeProvider } from '@/components/theme/theme-provider';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { createClient } from '@/utils/supabase/server';
+import { HubService } from '@/server/services/hub.service';
+import { HubRow } from '@/types';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   // 1. Titolo e Descrizione Principale
   title: {
-    default: 'Kyuubi Engine | L\'Intelligenza che muove il tuo Business',
-    template: '%s | Kyuubi Engine',
+    default: 'Kyuubi',
+    template: '%s | Kyuubi',
   },
   description:
-    'Ecosistema modulare per soluzioni gestionali su misura: automazione processi, magazzino QR Code, agenda prenotazioni e e-commerce integrato.',
+    'Ecosistema modulare per soluzioni gestionali su misura: automazione processi, magazzino QR Code, agenda prenotazioni e catalogo integrato per Hub.',
   metadataBase: new URL('https://kyuubi.eazyhubs.com'), // Sostituisci con il dominio effettivo se diverso (es. kyuubi.it)
 
   // 2. WebApp Manifest per Android / PWA
@@ -147,12 +149,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   let user = null;
+  let userHubs: HubRow[] = [];
   try {
     const supabase = await createClient();
     const {
       data,
     } = await supabase.auth.getUser();
     user = data?.user ?? null;
+    if (user) {
+      userHubs = await HubService.getUserHubs(user.id);
+    }
   } catch (err) {
     console.warn('[RootLayout] User session lookup failed:', err);
   }
@@ -173,7 +179,7 @@ export default async function RootLayout({
           enableSystem={false} /* <--- Opzionale: Ignora il tema di sistema per forzare il default */
           disableTransitionOnChange
         >
-          <Header user={user} />
+          <Header user={user} userHubs={userHubs} />
           <main className="flex-grow">{children}</main>
           <Footer />
         </ThemeProvider>

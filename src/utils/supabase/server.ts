@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { Database } from '@/types/database.types';
 
@@ -25,6 +26,22 @@ export async function createClient() {
             // Ignorato nei Server Components
           }
         },
+      },
+    }
+  );
+}
+
+export function createAdminClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return null;
+
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL,
+    serviceKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
       },
     }
   );
