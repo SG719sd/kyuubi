@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requireHubAdmin } from '@/server/auth/context';
 import { PrenotazioniService } from '@/server/services/prenotazioni.service';
 import {
   UpsertPrenotazioneInput,
@@ -32,6 +33,7 @@ export async function upsertPrenotazioneAction(
   hubSlug: string
 ) {
   try {
+    await requireHubAdmin(hubSlug || input.id_hub);
     const result = await PrenotazioniService.upsertPrenotazione(input);
     revalidatePath(`/dashboard/hubs/${hubSlug}/prenotazioni`);
     return { success: true, data: result };
@@ -50,6 +52,7 @@ export async function cambioStatoPrenotazioneAction(
   hubSlug: string
 ) {
   try {
+    await requireHubAdmin(hubSlug || hubId);
     const result = await PrenotazioniService.cambioStato(id, hubId, nuovoStato);
     revalidatePath(`/dashboard/hubs/${hubSlug}/prenotazioni`);
     return { success: true, data: result };
@@ -67,6 +70,7 @@ export async function deletePrenotazioneAction(
   hubSlug: string
 ) {
   try {
+    await requireHubAdmin(hubSlug || hubId);
     await PrenotazioniService.deletePrenotazione(id, hubId);
     revalidatePath(`/dashboard/hubs/${hubSlug}/prenotazioni`);
     return { success: true };

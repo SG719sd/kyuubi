@@ -17,6 +17,7 @@ import {
   UtensilsCrossed,
   ShieldCheck,
   UserPlus,
+  Lock,
 } from 'lucide-react';
 import { PrenotazioneWithDetails } from '@/server/repositories/prenotazioni.repository';
 import { upsertPrenotazioneAction } from '@/server/actions/prenotazioni.actions';
@@ -30,6 +31,7 @@ interface Props {
   piatti?: any[];
   hubId: string;
   hubSlug: string;
+  isAdmin?: boolean;
   onSelectSlot: (slot: {
     date: string;
     time?: string;
@@ -322,6 +324,7 @@ export default function AgendaClassica({
   piatti = [],
   hubId,
   hubSlug,
+  isAdmin = true,
   onSelectSlot,
   onEditPrenotazione,
 }: Props) {
@@ -476,18 +479,32 @@ export default function AgendaClassica({
       .slice(0, 5); // prime 5 date
   }, [prenotazioni, currentDateStr]);
 
-  // Handler Drag and Drop
+  // Handler Drag and Drop protetto da isAdmin
   const handleDragStart = (e: React.DragEvent, booking: PrenotazioneWithDetails) => {
+    if (!isAdmin) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData('text/plain', String(booking.id));
     setDraggedBooking(booking);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (!isAdmin) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDropSlot = (date: string, time: string, staffId?: number | null) => {
+    if (!isAdmin) {
+      setMoveNotice({
+        type: 'error',
+        message: 'Azione non consentita: solo gli amministratori possono spostare o modificare le prenotazioni.',
+      });
+      setTimeout(() => setMoveNotice(null), 4000);
+      return;
+    }
+
     if (!draggedBooking) return;
 
     const bookingId = draggedBooking.id;
@@ -534,6 +551,25 @@ export default function AgendaClassica({
       }
       setDraggedBooking(null);
     });
+  };
+
+  // Handler per selezione slot protetto da permessi Admin
+  const handleSlotClick = (slot: {
+    date: string;
+    time?: string;
+    staffId?: number | null;
+    senzaOrario?: boolean;
+    itemType?: 'servizio' | 'prodotto' | 'piatto';
+  }) => {
+    if (!isAdmin) {
+      setMoveNotice({
+        type: 'error',
+        message: 'Azione riservata: solo gli amministratori possono prendere o inserire nuove prenotazioni.',
+      });
+      setTimeout(() => setMoveNotice(null), 4500);
+      return;
+    }
+    onSelectSlot(slot);
   };
 
   // Helper per WhatsApp
@@ -716,7 +752,7 @@ export default function AgendaClassica({
           <button
             type="button"
             onClick={() =>
-              onSelectSlot({
+              handleSlotClick({
                 date: currentDateStr,
                 senzaOrario: true,
                 itemType: 'piatto',
@@ -728,6 +764,13 @@ export default function AgendaClassica({
             <UtensilsCrossed className="w-3.5 h-3.5" />
             <span>+ Piatto / Prodotto</span>
           </button>
+
+          {!isAdmin && (
+            <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
+              <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Sola Lettura (Admin)</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -778,7 +821,7 @@ export default function AgendaClassica({
             <button
               type="button"
               onClick={() =>
-                onSelectSlot({
+                handleSlotClick({
                   date: currentDateStr,
                   senzaOrario: true,
                   itemType: 'piatto',
@@ -1111,7 +1154,7 @@ export default function AgendaClassica({
                                 if (offsetY >= 30) {
                                   clickedTime = minutesToTime(timeToMinutes(time) + 15);
                                 }
-                                onSelectSlot({ date: currentDateStr, time: clickedTime, staffId: staff.id });
+                                handleSlotClick({ date: currentDateStr, time: clickedTime, staffId: staff.id });
                               }}
                               className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/15 cursor-pointer relative group transition-colors"
                             >
@@ -1163,13 +1206,13 @@ export default function AgendaClassica({
                           return (
                             <div
                               key={b.id}
-                              draggable
+                              draggable={isAdmin}
                               onDragStart={(e) => handleDragStart(e, b)}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onEditPrenotazione(b);
                               }}
-                              title={`${b.titolo || clientName} (${span.displayStart} - ${span.displayEnd}, ${span.duration}m). Clicca per modificare o trascina per spostare.`}
+                              title={`${b.titolo || clientName} (${span.displayStart} - ${span.displayEnd}, ${span.duration}m). ${isAdmin ? 'Clicca per modificare o trascina per spostare.' : 'Clicca per visualizzare i dettagli.'}`}
                               style={{
                                 top: `${top + 1}px`,
                                 height: `${height - 2}px`,
@@ -1178,7 +1221,7 @@ export default function AgendaClassica({
                                 borderLeft: `4px solid ${staffColor}`,
                                 backgroundColor: hexToRgba(staffColor, 0.12),
                               }}
-                              className="absolute rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs hover:shadow-md hover:z-30 transition-all cursor-grab active:cursor-grabbing pointer-events-auto overflow-hidden text-left"
+                              className={`absolute rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs hover:shadow-md hover:z-30 transition-all ${isAdmin ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} pointer-events-auto overflow-hidden text-left`}
                             >
                               {/* 1. LAYOUT COMPATTO: 15 MINUTI (Occupa solo il suo quarto d'ora, lasciando il resto libero) */}
                               {isQuarterHour ? (
@@ -1435,7 +1478,7 @@ export default function AgendaClassica({
                       {dayOrders.length === 0 && (
                         <div
                           onClick={() =>
-                            onSelectSlot({
+                            handleSlotClick({
                               date: dayStr,
                               senzaOrario: true,
                               itemType: 'piatto',
@@ -1543,7 +1586,7 @@ export default function AgendaClassica({
                                 if (offsetY >= 30) {
                                   clickedTime = minutesToTime(timeToMinutes(time) + 15);
                                 }
-                                onSelectSlot({
+                                handleSlotClick({
                                   date: dayStr,
                                   time: clickedTime,
                                   staffId:
@@ -1604,13 +1647,13 @@ export default function AgendaClassica({
                           return (
                             <div
                               key={b.id}
-                              draggable
+                              draggable={isAdmin}
                               onDragStart={(e) => handleDragStart(e, b)}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onEditPrenotazione(b);
                               }}
-                              title={`${b.titolo || clientName} (${staffName}) - ${span.displayStart} - ${span.displayEnd} (${span.duration}m). Clicca per modificare o trascina per spostare.`}
+                              title={`${b.titolo || clientName} (${staffName}) - ${span.displayStart} - ${span.displayEnd} (${span.duration}m). ${isAdmin ? 'Clicca per modificare o trascina per spostare.' : 'Clicca per visualizzare i dettagli.'}`}
                               style={{
                                 top: `${top + 1}px`,
                                 height: `${height - 2}px`,
@@ -1619,7 +1662,7 @@ export default function AgendaClassica({
                                 borderLeft: `4px solid ${staffColor}`,
                                 backgroundColor: hexToRgba(staffColor, 0.12),
                               }}
-                              className="absolute rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs hover:shadow-md hover:z-30 transition-all cursor-grab active:cursor-grabbing pointer-events-auto overflow-hidden text-left"
+                              className={`absolute rounded-xl border border-slate-200/90 dark:border-slate-700/80 shadow-xs hover:shadow-md hover:z-30 transition-all ${isAdmin ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} pointer-events-auto overflow-hidden text-left`}
                             >
                               {/* 1. LAYOUT COMPATTO: 15 MINUTI (Occupa solo il suo quarto d'ora, lasciando il resto libero) */}
                               {isQuarterHour ? (

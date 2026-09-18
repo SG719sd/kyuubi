@@ -2,7 +2,11 @@ import { z } from 'zod';
 
 export const professionistaSchema = z.object({
   id_hub: z.string().uuid('ID Hub non valido'),
-  id_user: z.string().uuid('ID User non valido'), // Inserito manualmente per ora
+  id_user: z
+    .union([z.string().uuid('ID User non valido'), z.literal(''), z.null()])
+    .optional()
+    .nullable()
+    .transform((v) => (v && typeof v === 'string' && v.trim() !== '' ? v.trim() : null)),
   nome: z.string().min(2, 'Il nome deve avere almeno 2 caratteri').max(255),
   ruolo: z.string().max(30).default('collaboratore'),
   img_url: z.string().url('URL non valido').nullable().optional(),

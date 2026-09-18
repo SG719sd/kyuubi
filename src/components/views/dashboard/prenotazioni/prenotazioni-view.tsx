@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   List,
   CalendarRange,
+  Lock,
 } from 'lucide-react';
 import PrenotazioneDrawer from './prenotazione-drawer';
 import AgendaClassica from './agenda-classica';
@@ -97,6 +98,7 @@ export default function PrenotazioniView({
 
   // Quick action: change status
   const handleQuickStatusChange = (id: number, nextStato: string) => {
+    if (!isAdmin) return;
     startTransition(async () => {
       const res = await cambioStatoPrenotazioneAction(id, hubId, nextStato, hubSlug);
       if (res.success) {
@@ -293,7 +295,7 @@ export default function PrenotazioniView({
           </button>
         </div>
 
-        {isAdmin && (
+        {isAdmin ? (
           <button
             type="button"
             onClick={handleOpenCreate}
@@ -302,6 +304,11 @@ export default function PrenotazioniView({
             <Plus className="w-4 h-4" />
             <span>Nuova Prenotazione</span>
           </button>
+        ) : (
+          <div className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs font-semibold flex items-center gap-1.5 shrink-0 shadow-2xs">
+            <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Sola Lettura (Admin richiesto per modifiche)</span>
+          </div>
         )}
       </div>
 
@@ -314,6 +321,7 @@ export default function PrenotazioniView({
           servizi={servizi}
           hubId={hubId}
           hubSlug={hubSlug}
+          isAdmin={isAdmin}
           onSelectSlot={handleSelectSlotFromAgenda}
           onEditPrenotazione={handleOpenEdit}
         />
@@ -484,7 +492,7 @@ export default function PrenotazioniView({
 
                     {/* Quick actions buttons */}
                     <div className="flex items-center gap-1.5">
-                      {p.stato === 'pending' && (
+                      {isAdmin && p.stato === 'pending' && (
                         <button
                           type="button"
                           onClick={() => handleQuickStatusChange(p.id, 'confermata')}
@@ -496,7 +504,7 @@ export default function PrenotazioniView({
                         </button>
                       )}
 
-                      {p.stato === 'confermata' && (
+                      {isAdmin && p.stato === 'confermata' && (
                         <button
                           type="button"
                           onClick={() => handleQuickStatusChange(p.id, 'completata')}
@@ -508,13 +516,13 @@ export default function PrenotazioniView({
                         </button>
                       )}
 
-                      {/* Modifica Drawer Button */}
+                      {/* Modifica / Dettagli Drawer Button */}
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(p)}
                         className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
                       >
-                        <span>Dettagli</span>
+                        <span>{isAdmin ? 'Modifica' : 'Dettagli'}</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -612,6 +620,7 @@ export default function PrenotazioniView({
         onClose={() => setIsDrawerOpen(false)}
         hubId={hubId}
         hubSlug={hubSlug}
+        isAdmin={isAdmin}
         initialData={selectedPrenotazione}
         initialDate={initialSlot.date}
         initialTime={initialSlot.time}

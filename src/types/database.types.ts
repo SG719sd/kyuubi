@@ -786,7 +786,7 @@ export type Database = {
           deleted_at: string | null
           id: number
           id_hub: string
-          id_user: string
+          id_user: string | null
           img_url: string | null
           is_active: boolean
           is_visible: boolean
@@ -804,7 +804,7 @@ export type Database = {
           deleted_at?: string | null
           id?: number
           id_hub: string
-          id_user: string
+          id_user?: string | null
           img_url?: string | null
           is_active?: boolean
           is_visible?: boolean
@@ -822,7 +822,7 @@ export type Database = {
           deleted_at?: string | null
           id?: number
           id_hub?: string
-          id_user?: string
+          id_user?: string | null
           img_url?: string | null
           is_active?: boolean
           is_visible?: boolean

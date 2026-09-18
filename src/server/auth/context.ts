@@ -23,7 +23,7 @@ interface ProfQueryData {
  * Recupera il contesto dell'Hub sempre aggiornato direttamente dal DB,
  * bypassando gli header della richiesta ed evitando qualsiasi caching di Next.js.
  */
-export async function getHubContext(slugHub?: string): Promise<HubContext | null> {
+export async function getHubContext(slugOrId?: string): Promise<HubContext | null> {
   // Disabilita la cache di Next.js per questa chiamata per avere sempre dati freschi
   noStore();
 
@@ -32,37 +32,50 @@ export async function getHubContext(slugHub?: string): Promise<HubContext | null
 
   if (!user) return null;
 
-  // Se viene passato uno slug, leggiamo direttamente dal DB per avere la verità aggiornata
-  if (slugHub) {
+  // Se viene passato uno slug o un ID hub, leggiamo direttamente dal DB per avere la verità aggiornata
+  if (slugOrId) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
+
+    // Recupera l'hub sia per slug che per id
+    const hubQuery = supabase
+      .from('hubs')
+      .select('id, slug, id_user')
+      .is('deleted_at', null);
+
+    const { data: hub } = await (isUuid
+      ? hubQuery.eq('id', slugOrId).maybeSingle()
+      : hubQuery.eq('slug', slugOrId).maybeSingle());
+
+    if (!hub) return null;
+
+    const isOwner = hub.id_user === user.id;
+
+    // Recupera il profilo professionista associato a questo utente e hub
     const { data: rawProf } = await supabase
       .from('professionisti')
-      .select(`
-        id,
-        id_hub,
-        ruolo,
-        admin,
-        hubs!inner(slug)
-      `)
+      .select('id, id_hub, ruolo, admin')
       .eq('id_user', user.id)
-      .eq('hubs.slug', slugHub)
+      .eq('id_hub', hub.id)
       .eq('is_active', true)
       .is('deleted_at', null)
       .maybeSingle();
 
     const prof = rawProf as unknown as ProfQueryData | null;
 
-    if (!prof) return null;
+    if (!prof && !isOwner) return null;
 
-    const isBooleanoAdmin = Boolean(prof.admin);
-    const ruoloLower = prof.ruolo ? prof.ruolo.toLowerCase() : '';
-    const hasWritePermissions = isBooleanoAdmin || ['admin', 'titolare', 'owner', 'gestore'].includes(ruoloLower);
+    const isBooleanoAdmin = Boolean(prof?.admin) || isOwner;
+    const ruoloLower = prof?.ruolo ? prof.ruolo.toLowerCase() : (isOwner ? 'admin' : '');
+    const hasWritePermissions =
+      isBooleanoAdmin ||
+      ['admin', 'amministratore', 'titolare', 'owner', 'gestore'].includes(ruoloLower);
 
     return {
       userId: user.id,
-      hubId: prof.id_hub,
-      hubSlug: slugHub,
-      professionistaId: prof.id,
-      ruolo: prof.ruolo,
+      hubId: hub.id,
+      hubSlug: hub.slug,
+      professionistaId: prof?.id || 0,
+      ruolo: prof?.ruolo || (isOwner ? 'admin' : 'collaboratore'),
       admin: isBooleanoAdmin,
       isAdmin: hasWritePermissions,
     };

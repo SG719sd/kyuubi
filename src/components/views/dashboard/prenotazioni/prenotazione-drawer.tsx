@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   UserMinus,
   Undo2,
+  Lock,
 } from 'lucide-react';
 import {
   upsertPrenotazioneAction,
@@ -37,6 +38,7 @@ interface Props {
   onClose: () => void;
   hubId: string;
   hubSlug: string;
+  isAdmin?: boolean;
   initialData?: PrenotazioneWithDetails | null;
   initialDate?: string;
   initialTime?: string;
@@ -66,6 +68,7 @@ export default function PrenotazioneDrawer({
   onClose,
   hubId,
   hubSlug,
+  isAdmin = true,
   initialData,
   initialDate,
   initialTime,
@@ -654,6 +657,11 @@ export default function PrenotazioneDrawer({
     e.preventDefault();
     setErrorMsg(null);
 
+    if (!isAdmin) {
+      setErrorMsg('Operazione non consentita: solo gli amministratori possono salvare o creare prenotazioni.');
+      return;
+    }
+
     if (items.length === 0) {
       setErrorMsg('Aggiungi almeno un servizio, prodotto o piatto alla prenotazione');
       return;
@@ -732,6 +740,10 @@ export default function PrenotazioneDrawer({
   };
 
   const handleDelete = async () => {
+    if (!isAdmin) {
+      setErrorMsg('Operazione non consentita: solo gli amministratori possono cancellare le prenotazioni.');
+      return;
+    }
     if (!initialData) return;
     if (!confirm('Sei sicuro di voler cancellare questa prenotazione?')) return;
 
@@ -836,7 +848,15 @@ export default function PrenotazioneDrawer({
             </div>
           )}
 
-          <form id="prenotazione-form" onSubmit={handleSubmit} className="space-y-6">
+          {!isAdmin && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center gap-2.5 text-xs text-amber-800 dark:text-amber-300">
+              <Lock className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>Modalità consultazione: solo gli utenti con ruolo di amministratore possono salvare modifiche o prendere nuove prenotazioni.</span>
+            </div>
+          )}
+
+          <form id="prenotazione-form" onSubmit={handleSubmit}>
+            <fieldset disabled={!isAdmin} className="space-y-6">
             
             {/* Feedback rapido aggiunta cliente */}
             {quickClientSuccessMsg && (
@@ -1821,34 +1841,35 @@ export default function PrenotazioneDrawer({
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               />
             </div>
+          </fieldset>
+        </form>
+      </div>
 
-          </form>
-        </div>
-
-        {/* Footer Drawer */}
-        <div className="p-4 sm:p-5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-950/50">
-          <div>
-            {initialData && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={isPending}
-                className="px-3 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                Elimina
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+      {/* Footer Drawer */}
+      <div className="p-4 sm:p-5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-950/50">
+        <div>
+          {isAdmin && initialData && (
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer text-center"
+              onClick={handleDelete}
+              disabled={isPending}
+              className="px-3 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition-colors cursor-pointer"
             >
-              Annulla
+              Elimina
             </button>
+          )}
+        </div>
 
+        <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 sm:flex-none px-4 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer text-center"
+          >
+            {isAdmin ? 'Annulla' : 'Chiudi'}
+          </button>
+
+          {isAdmin ? (
             <button
               type="submit"
               form="prenotazione-form"
@@ -1857,8 +1878,14 @@ export default function PrenotazioneDrawer({
             >
               {isPending ? 'Salvataggio...' : initialData ? 'Salva Modifiche' : 'Crea Prenotazione'}
             </button>
-          </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 rounded-xl">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Modifiche riservate agli Admin</span>
+            </div>
+          )}
         </div>
+      </div>
 
       </div>
     </div>

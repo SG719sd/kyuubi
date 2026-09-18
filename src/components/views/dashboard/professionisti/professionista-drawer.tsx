@@ -105,6 +105,7 @@ export default function ProfessionistaDrawer({
     const payload = {
       ...form,
       id_hub: hubId,
+      id_user: form.id_user.trim() ? form.id_user.trim() : null,
       img_url: form.img_url.trim() || null,
       note: form.note.trim() || null,
       colore: form.colore.trim() || null,
@@ -253,18 +254,22 @@ export default function ProfessionistaDrawer({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                User UUID *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  User UUID (Consigliato)
+                </label>
+                <span className="text-[10px] text-slate-400 font-medium">Opzionale / Libero</span>
+              </div>
               <input
                 type="text"
-                required
-                disabled={Boolean(initialData)}
                 value={form.id_user}
                 onChange={(e) => setForm({ ...form, id_user: e.target.value })}
-                className="w-full border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50 transition-all font-mono"
-                placeholder="es. c56a4180-65aa..."
+                className="w-full border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all font-mono"
+                placeholder="es. c56a4180-65aa-4929-9e8c-529e84610bc4 (opzionale)"
               />
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
+                Collega l'account Kyuubi del professionista per consentirgli l'accesso all'agenda e ai propri servizi. Non è obbligatorio: puoi registrarlo liberamente anche senza UUID.
+              </p>
             </div>
 
             <div>
