@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/utils/supabase/server';
+import { getCurrentUser } from '@/utils/supabase/server';
 import { UserService } from '@/server/services/user.service';
 import { HubService } from '@/server/services/hub.service';
 import {
@@ -14,14 +14,13 @@ import {
 } from 'lucide-react';
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const authUser = await getCurrentUser();
 
   if (!authUser) {
     redirect('/login');
   }
 
-  // Chiamate parallele per Profilo Utente e Lista degli Hubs
+  // Chiamate parallele per Profilo Utente e Lista degli Hubs (con cache per-request)
   const [userProfile, userHubs] = await Promise.all([
     UserService.findById(authUser.id).catch(() => null),
     HubService.getUserHubs(authUser.id).catch(() => [])

@@ -2,11 +2,12 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { Database } from '@/types/database.types';
+import { cache } from 'react';
 
 const FALLBACK_SUPABASE_URL = 'https://memjlrhljifrwjqyymil.supabase.co';
 const FALLBACK_SUPABASE_KEY = 'placeholder-anon-key';
 
-export async function createClient() {
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -29,7 +30,18 @@ export async function createClient() {
       },
     }
   );
-}
+});
+
+export const getCurrentUser = cache(async () => {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    return user ?? null;
+  } catch (err) {
+    console.warn('[getCurrentUser] Failed to retrieve user session:', err);
+    return null;
+  }
+});
 
 export function createAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -46,3 +58,4 @@ export function createAdminClient() {
     }
   );
 }
+

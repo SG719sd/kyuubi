@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { createClient } from '@/utils/supabase/server';
+import { getCurrentUser } from '@/utils/supabase/server';
 import { HubService } from '@/server/services/hub.service';
 import BackButton from '@/components/layout/back-button';
 import HubPageWrapper from '@/components/layout/wrapper/HubPageWrapper';
@@ -20,8 +20,7 @@ interface GestioneHubPageProps {
 
 export default async function GestioneHubPage({ params }: GestioneHubPageProps) {
   const { slugHub } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     redirect('/login');

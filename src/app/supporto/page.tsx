@@ -128,7 +128,7 @@ export default function SupportoPage() {
             <Link href="/privacy-policy" className="hover:underline">
               Privacy Policy
             </Link>
-            <Link href="/pricing" className="hover:underline">
+            <Link href="/prezzi" className="hover:underline">
               Prezzi
             </Link>
             <Link href="/login" className="font-semibold text-sky-600 dark:text-sky-400 hover:underline">

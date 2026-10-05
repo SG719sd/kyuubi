@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, UserCheck, Image as ImageIcon, User } from "lucide-react";
+import { X, UserCheck, User } from "lucide-react";
 import { compressAndConvertToWebP } from "@/lib/image-optimizer";
 import { getHubStoragePath } from "@/types/storage-paths";
 import {

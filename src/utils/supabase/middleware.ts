@@ -18,6 +18,16 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+  const isAuthRoute = pathname.startsWith('/login');
+  const isDashboardRoute = pathname.startsWith('/dashboard');
+  const isRootRoute = pathname === '/';
+
+  // Per pagine pubbliche informative (prezzi, privacy, supporto, termini), restituisci subito
+  if (!isAuthRoute && !isDashboardRoute && !isRootRoute) {
+    return supabaseResponse;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://memjlrhljifrwjqyymil.supabase.co';
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
@@ -52,10 +62,6 @@ export async function updateSession(request: NextRequest) {
     console.warn('[Supabase Middleware] Session lookup failed:', err);
   }
 
-  const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith('/login');
-  const isDashboardRoute = pathname.startsWith('/dashboard');
-
   // 1. Redirect utente non autenticato
   if (!user && isDashboardRoute) {
     const url = request.nextUrl.clone();
@@ -64,7 +70,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // 2. Redirect utente già autenticato da login o root a dashboard
-  if (user && (isAuthRoute || pathname === '/')) {
+  if (user && (isAuthRoute || isRootRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

@@ -23,7 +23,7 @@ export class ProdottiService {
 
   static async updateProdotto(id: number, input: Partial<ProdottoInput>) {
     const cleanedInput = Object.fromEntries(
-      Object.entries(input).filter(([_, v]) => v !== undefined)
+      Object.entries(input).filter(([, v]) => v !== undefined)
     );
     return await ProdottiRepository.update(id, cleanedInput);
   }

@@ -109,7 +109,8 @@ export function WizardClient() {
       return;
     }
 
-    window.location.href = `/dashboard/hubs/${res.data.slug}`;
+    router.push(`/dashboard/hubs/${res.data.slug}`);
+    router.refresh();
   }
 
   return (

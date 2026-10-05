@@ -23,7 +23,7 @@ export class ServiziService {
 
   static async updateServizio(id: number, input: Partial<ServizioInput>) {
     const cleanedInput = Object.fromEntries(
-      Object.entries(input).filter(([_, v]) => v !== undefined)
+      Object.entries(input).filter(([, v]) => v !== undefined)
     );
     return await ServiziRepository.update(id, cleanedInput);
   }

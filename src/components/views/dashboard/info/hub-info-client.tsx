@@ -180,14 +180,14 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
       )}
 
       {/* Tabs Switcher */}
-      <div className="inline-flex p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex-wrap gap-1">
+      <div className="flex w-full sm:w-auto overflow-x-auto p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 gap-1 no-scrollbar shrink-0">
         <button
           type="button"
           onClick={() => {
             setActiveTab("general");
             setMessage(null);
           }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 whitespace-nowrap min-h-[38px] ${
             activeTab === "general"
               ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
               : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -203,7 +203,7 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
             setActiveTab("style");
             setMessage(null);
           }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 whitespace-nowrap min-h-[38px] ${
             activeTab === "style"
               ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
               : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -219,7 +219,7 @@ export function HubInfoClient({ slugHub, isAdmin, initialData }: Props) {
             setActiveTab("billing");
             setMessage(null);
           }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 whitespace-nowrap min-h-[38px] ${
             activeTab === "billing"
               ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
               : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"

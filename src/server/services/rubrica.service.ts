@@ -13,7 +13,7 @@ export class RubricaService {
 
   static async updateContatto(id: number, input: Partial<RubricaInput>) {
     const cleanedInput = Object.fromEntries(
-      Object.entries(input).filter(([_, v]) => v !== undefined)
+      Object.entries(input).filter(([, v]) => v !== undefined)
     );
     return await RubricaRepository.update(id, cleanedInput);
   }

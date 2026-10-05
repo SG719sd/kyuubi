@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ServizioProfessionistaDrawer from './servizio-professionista-drawer';
 import { User, SlidersHorizontal, Clock, Tag } from 'lucide-react';
 
@@ -23,7 +23,20 @@ export default function ServiziProfessionistiView({
   const [selectedServizio, setSelectedServizio] = useState<any | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const selectedProf = professionisti.find((p) => p.id === selectedProfId);
+  const selectedProf = useMemo(() => {
+    return professionisti.find((p) => p.id === selectedProfId);
+  }, [professionisti, selectedProfId]);
+
+  // Indicizzazione O(1) delle personalizzazioni
+  const customMap = useMemo(() => {
+    const map = new Map<number, any>();
+    personalizzazioni.forEach((p) => {
+      if (p.id_professionista === selectedProfId) {
+        map.set(p.id_servizio, p);
+      }
+    });
+    return map;
+  }, [personalizzazioni, selectedProfId]);
 
   const handleOpenEdit = (servizio: any) => {
     setSelectedServizio(servizio);
@@ -32,34 +45,32 @@ export default function ServiziProfessionistiView({
 
   return (
     <div className="space-y-6">
-      {/* Tabs Professionisti */}
-      <div className="flex items-center gap-2 overflow-x-auto p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 pl-3 pr-1 whitespace-nowrap">
+      {/* Tabs Professionisti Mobile-First */}
+      <div className="flex items-center gap-2 overflow-x-auto p-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs no-scrollbar">
+        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 pl-2 pr-1 whitespace-nowrap hidden sm:inline">
           Seleziona Operatore:
         </span>
         {professionisti.map((prof) => (
           <button
             key={prof.id}
             onClick={() => setSelectedProfId(prof.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shrink-0 min-h-[40px] cursor-pointer whitespace-nowrap ${
               selectedProfId === prof.id
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80'
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>{prof.nome} {prof.cognome}</span>
+            <span>{prof.nome} {prof.cognome || ''}</span>
           </button>
         ))}
       </div>
 
       {/* Grid Servizi del Professionista Selezionato */}
       {selectedProfId > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {servizi.map((servizio) => {
-            const custom = personalizzazioni.find(
-              (p) => p.id_professionista === selectedProfId && p.id_servizio === servizio.id
-            );
+            const custom = customMap.get(servizio.id);
 
             const isAbilitato = custom ? custom.is_active : true;
             const prezzoEffettivo = custom?.prezzo_personalizzato ?? servizio.prezzo;

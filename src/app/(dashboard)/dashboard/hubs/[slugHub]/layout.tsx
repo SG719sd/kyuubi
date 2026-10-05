@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { createClient } from '@/utils/supabase/server';
+import { getCurrentUser } from '@/utils/supabase/server';
 import { HubService } from '@/server/services/hub.service';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -12,8 +12,7 @@ export default async function HubSlugLayout({
   params: Promise<{ slugHub: string }>;
 }) {
   const { slugHub } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     redirect('/login');

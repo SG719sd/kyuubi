@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+import { getCurrentUser } from "@/utils/supabase/server";
 import { HubService } from "@/server/services/hub.service";
 import { HubWithProfessionista } from "@/types";
 import { HubLogoUploader } from "@/components/views/dashboard/hub-logo-uploader";
@@ -34,10 +34,7 @@ interface HubLandingPageProps {
 
 export default async function HubLandingPage({ params }: HubLandingPageProps) {
   const { slugHub } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) {
     redirect("/login");

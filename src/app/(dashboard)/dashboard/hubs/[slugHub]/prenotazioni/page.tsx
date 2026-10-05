@@ -44,31 +44,22 @@ export default async function PrenotazioniPage({
 
   return (
     <HubPageWrapper slugHub={slugHub}>
-      {/* Hero Principale integrata nel Server Component */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl border border-indigo-500/20 mb-6">
-        {/* Pulsante Torna Indietro */}
-        <div className="mb-6">
+      {/* Intestazione Compatta ed Elegante */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+        <div className="flex items-center gap-3">
           <BackButton />
-        </div>
-
-        {/* Contenuto Hero */}
-        <div className="relative z-10 space-y-3 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-medium">
-            <span>📅 Agenda & Appuntamenti</span>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <span>Agenda Prenotazioni</span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200/60 dark:border-indigo-800/60 hidden sm:inline-block">
+                Servizi & Staff
+              </span>
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Gestione appuntamenti, orari e disponibilità operatori
+            </p>
           </div>
-
-          <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight text-white">
-            Gestione Prenotazioni
-          </h1>
-
-          <p className="text-xs md:text-sm text-indigo-100/80 leading-relaxed">
-            Monitora l'agenda degli appuntamenti, pianifica nuovi slot per il tuo staff, gestisci lo stato delle richieste e visualizza i clienti associati.
-          </p>
         </div>
-
-        {/* Decorazioni di Sfondo */}
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
       </div>
 
       {/* Vista Gestionale (Client Component) */}

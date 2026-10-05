@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
-import { createClient } from '@/utils/supabase/server';
-import { unstable_noStore as noStore } from 'next/cache';
+import { createClient, getCurrentUser } from '@/utils/supabase/server';
+import { cache } from 'react';
 
 export interface HubContext {
   userId: string;
@@ -20,23 +20,49 @@ interface ProfQueryData {
 }
 
 /**
- * Recupera il contesto dell'Hub sempre aggiornato direttamente dal DB,
- * bypassando gli header della richiesta ed evitando qualsiasi caching di Next.js.
+ * Recupera il contesto dell'Hub con deduplicazione a livello di richiesta (React cache),
+ * verificando prima gli header iniettati dal proxy/middleware per evitare query DB ridondanti.
  */
-export async function getHubContext(slugOrId?: string): Promise<HubContext | null> {
-  // Disabilita la cache di Next.js per questa chiamata per avere sempre dati freschi
-  noStore();
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
+export const getHubContext = cache(async (slugOrId?: string): Promise<HubContext | null> => {
+  const user = await getCurrentUser();
   if (!user) return null;
 
-  // Se viene passato uno slug o un ID hub, leggiamo direttamente dal DB per avere la verità aggiornata
+  // 1. Controlla prima gli header passati dal middleware per risposta immediata a costo zero
+  const headerList = await headers();
+  const hId = headerList.get('x-hub-id');
+  const hSlug = headerList.get('x-hub-slug');
+  const hProfId = headerList.get('x-professionista-id');
+  const hRuolo = headerList.get('x-professionista-ruolo');
+  const hAdmin = headerList.get('x-professionista-admin');
+
+  if (
+    hId &&
+    hProfId &&
+    hAdmin !== null &&
+    (!slugOrId || slugOrId === hSlug || slugOrId === hId)
+  ) {
+    const isBooleanoAdmin = hAdmin === 'true';
+    const ruoloLower = (hRuolo || '').toLowerCase();
+    const hasWritePermissions =
+      isBooleanoAdmin ||
+      ['admin', 'amministratore', 'titolare', 'owner', 'gestore'].includes(ruoloLower);
+
+    return {
+      userId: user.id,
+      hubId: hId,
+      hubSlug: hSlug || (slugOrId || ''),
+      professionistaId: Number(hProfId),
+      ruolo: hRuolo || 'collaboratore',
+      admin: isBooleanoAdmin,
+      isAdmin: hasWritePermissions,
+    };
+  }
+
+  // 2. Se non presente negli header o diverso dallo slug richiesto, recupera dal DB
   if (slugOrId) {
+    const supabase = await createClient();
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
 
-    // Recupera l'hub sia per slug che per id
     const hubQuery = supabase
       .from('hubs')
       .select('id, slug, id_user')
@@ -50,7 +76,6 @@ export async function getHubContext(slugOrId?: string): Promise<HubContext | nul
 
     const isOwner = hub.id_user === user.id;
 
-    // Recupera il profilo professionista associato a questo utente e hub
     const { data: rawProf } = await supabase
       .from('professionisti')
       .select('id, id_hub, ruolo, admin')
@@ -81,32 +106,8 @@ export async function getHubContext(slugOrId?: string): Promise<HubContext | nul
     };
   }
 
-  // Fallback sugli header solo se non viene fornito uno slugHub
-  const headerList = await headers();
-  const hubId = headerList.get('x-hub-id');
-  const hubSlug = headerList.get('x-hub-slug');
-  const profId = headerList.get('x-professionista-id');
-  const ruolo = headerList.get('x-professionista-ruolo');
-  const adminHeader = headerList.get('x-professionista-admin');
-
-  if (hubId && profId && ruolo && adminHeader !== null) {
-    const isBooleanoAdmin = adminHeader === 'true';
-    const ruoloLower = ruolo.toLowerCase();
-    const hasWritePermissions = isBooleanoAdmin || ['admin', 'titolare', 'owner', 'gestore'].includes(ruoloLower);
-
-    return {
-      userId: user.id,
-      hubId,
-      hubSlug: hubSlug || '',
-      professionistaId: Number(profId),
-      ruolo,
-      admin: isBooleanoAdmin,
-      isAdmin: hasWritePermissions,
-    };
-  }
-
   return null;
-}
+});
 
 export async function requireHubMember(slugHub: string): Promise<HubContext> {
   const ctx = await getHubContext(slugHub);

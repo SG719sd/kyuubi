@@ -1,11 +1,12 @@
 import { UserRepository } from "../repositories/user.repository";
 import { UserRow, TablesInsert, TablesUpdate } from "@/types";
+import { cache } from "react";
 
 export class UserService {
   /**
-   * Recupera il profilo utente e ne verifica l'attivazione
+   * Recupera il profilo utente e ne verifica l'attivazione (memoizzato per richiesta)
    */
-  static async getUserProfile(userId: string): Promise<UserRow> {
+  static getUserProfile = cache(async (userId: string): Promise<UserRow> => {
     const user = await UserRepository.findById(userId);
 
     if (!user) {
@@ -15,7 +16,7 @@ export class UserService {
       throw new Error("L'account utente è disattivato.");
     }
     return user;
-  }
+  });
 
   /**
    * Creazione profilo utente iniziale
@@ -53,7 +54,8 @@ export class UserService {
     return await UserRepository.softDelete(userId);
   }
 
-  static async findById(id: string): Promise<UserRow | null> {
+  static findById = cache(async (id: string): Promise<UserRow | null> => {
     return await UserRepository.findById(id);
-  }
+  });
 }
+

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CalendarCheck,
@@ -35,7 +35,7 @@ interface Props {
 }
 
 export default function PrenotazioniView({
-  prenotazioni,
+  prenotazioni: initialPrenotazioni,
   professionisti,
   professionistiServizi = [],
   clienti,
@@ -48,6 +48,12 @@ export default function PrenotazioniView({
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [prenotazioniList, setPrenotazioniList] = useState(initialPrenotazioni);
+
+  // Sincronizza se i dati cambiano da SSR o router.refresh()
+  useEffect(() => {
+    setPrenotazioniList(initialPrenotazioni);
+  }, [initialPrenotazioni]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('tutti');
@@ -96,35 +102,29 @@ export default function PrenotazioniView({
     }
   };
 
-  // Quick action: change status
+  // Quick action: change status with optimistic feedback
   const handleQuickStatusChange = (id: number, nextStato: string) => {
     if (!isAdmin) return;
+    // Aggiornamento ottimistico istantaneo per feedback immediato nell'interfaccia
+    setPrenotazioniList((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, stato: nextStato as any } : p))
+    );
     startTransition(async () => {
       const res = await cambioStatoPrenotazioneAction(id, hubId, nextStato, hubSlug);
       if (res.success) {
         router.refresh();
+      } else {
+        // Ripristina in caso di errore
+        setPrenotazioniList(initialPrenotazioni);
       }
     });
   };
-
-  // KPIs
-  const stats = useMemo(() => {
-    const total = prenotazioni.length;
-    const pending = prenotazioni.filter((p) => p.stato === 'pending').length;
-    const confermate = prenotazioni.filter((p) => p.stato === 'confermata').length;
-    const completate = prenotazioni.filter((p) => p.stato === 'completata').length;
-    const revenue = prenotazioni
-      .filter((p) => p.stato !== 'cancellata')
-      .reduce((sum, p) => sum + (Number(p.totale) || 0), 0);
-
-    return { total, pending, confermate, completate, revenue };
-  }, [prenotazioni]);
 
   // Filtering for List & Timeline views
   const filteredPrenotazioni = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    return prenotazioni.filter((p) => {
+    return prenotazioniList.filter((p) => {
       // 1. Text search
       if (search.trim()) {
         const query = search.toLowerCase();
@@ -161,7 +161,7 @@ export default function PrenotazioniView({
 
       return true;
     });
-  }, [prenotazioni, search, statusFilter, staffFilter, dateQuickFilter]);
+  }, [prenotazioniList, search, statusFilter, staffFilter, dateQuickFilter]);
 
   // Group by date for timeline
   const groupedByDate = useMemo(() => {
@@ -202,120 +202,73 @@ export default function PrenotazioniView({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      
-      {/* Statistiche & KPI Rapidi */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs">
-          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">
-            Totale Appuntamenti
-          </span>
-          <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            {stats.total}
-          </span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl p-4 shadow-2xs">
-          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 block mb-1">
-            In Attesa (Pending)
-          </span>
-          <span className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400">
-            {stats.pending}
-          </span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-blue-200/80 dark:border-blue-900/50 rounded-2xl p-4 shadow-2xs">
-          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 block mb-1">
-            Confermate
-          </span>
-          <span className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">
-            {stats.confermate}
-          </span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-emerald-200/80 dark:border-emerald-900/50 rounded-2xl p-4 shadow-2xs">
-          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">
-            Completate
-          </span>
-          <span className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">
-            {stats.completate}
-          </span>
-        </div>
-
-        <div className="col-span-2 lg:col-span-1 bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-900/50 rounded-2xl p-4 shadow-2xs">
-          <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 block mb-1">
-            Volume Atteso
-          </span>
-          <span className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 truncate block">
-            € {stats.revenue.toFixed(2)}
-          </span>
-        </div>
-      </div>
-
-      {/* Switch Modalità di Vista Principale & Nuovo */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl flex items-center gap-1 self-start sm:self-auto">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      {/* Switcher Modalità di Vista & Nuovo Appuntamento */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-2.5 sm:p-3 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex items-center gap-1 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setViewMode('agenda')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
               viewMode === 'agenda'
                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <CalendarRange className="w-4 h-4" />
-            <span>Agenda Classica</span>
+            <CalendarRange className="w-3.5 h-3.5" />
+            <span>Agenda</span>
           </button>
 
           <button
             type="button"
             onClick={() => setViewMode('elenco')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
               viewMode === 'elenco'
                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <List className="w-4 h-4" />
-            <span>Tabella Elenco</span>
+            <List className="w-3.5 h-3.5" />
+            <span>Elenco</span>
           </button>
 
           <button
             type="button"
             onClick={() => setViewMode('timeline')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
               viewMode === 'timeline'
                 ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <LayoutGrid className="w-4 h-4" />
-            <span>Raggruppati per Data</span>
+            <LayoutGrid className="w-3.5 h-3.5" />
+            <span>Per Data</span>
           </button>
         </div>
 
-        {isAdmin ? (
-          <button
-            type="button"
-            onClick={handleOpenCreate}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuova Prenotazione</span>
-          </button>
-        ) : (
-          <div className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs font-semibold flex items-center gap-1.5 shrink-0 shadow-2xs">
-            <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            <span>Sola Lettura (Admin richiesto per modifiche)</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 justify-end">
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={handleOpenCreate}
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuova Prenotazione</span>
+            </button>
+          ) : (
+            <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
+              <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Sola Lettura</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* VISTA 1: AGENDA CLASSICA (CALENDARIO GIORNALIERO E SETTIMANALE CON DRAG AND DROP E CONTATTI RAPIDI) */}
       {viewMode === 'agenda' && (
         <AgendaClassica
-          prenotazioni={prenotazioni}
+          prenotazioni={prenotazioniList}
           professionisti={professionisti}
           clienti={clienti}
           servizi={servizi}
@@ -486,7 +439,7 @@ export default function PrenotazioniView({
                         <span className="text-indigo-600 dark:text-indigo-400 ml-0.5">{formattedTime}</span>
                       </div>
                       <div className="text-[11px] text-slate-400 font-medium">
-                        Durata: {p.tempo_minuti || 30} min • € {Number(p.totale || 0).toFixed(2)}
+                        Durata: {p.tempo_minuti || 30} min
                       </div>
                     </div>
 
@@ -595,7 +548,9 @@ export default function PrenotazioniView({
 
                           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                             <span>{item.rubrica ? `${item.rubrica.nome} ${item.rubrica.cognome || ''}` : 'Anonimo'}</span>
-                            <span className="font-bold text-slate-900 dark:text-white">€ {Number(item.totale).toFixed(2)}</span>
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">
+                              {item.items && item.items.length > 0 ? `${item.items.length} ${item.items.length === 1 ? 'servizio' : 'servizi'}` : ''}
+                            </span>
                           </div>
 
                           {item.professionisti && (

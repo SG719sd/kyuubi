@@ -33,23 +33,24 @@ export class HubRepository {
   static async findUserHubs(userId: string): Promise<HubRow[]> {
     const supabase = await createClient();
 
-    // 1. Hubs a cui l'utente appartiene come professionista/collaboratore/admin
-    const { data: profHubs } = await supabase
-      .from('professionisti')
-      .select(`
-        hubs!inner(*)
-      `)
-      .eq('id_user', userId)
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .is('hubs.deleted_at', null);
+    // Esegui in parallelo il recupero degli Hub come membro e come proprietario
+    const [profRes, ownedRes] = await Promise.all([
+      supabase
+        .from('professionisti')
+        .select(`hubs!inner(*)`)
+        .eq('id_user', userId)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .is('hubs.deleted_at', null),
+      supabase
+        .from('hubs')
+        .select('*')
+        .eq('id_user', userId)
+        .is('deleted_at', null),
+    ]);
 
-    // 2. Hubs creati/posseduti direttamente dall'utente
-    const { data: ownedHubs } = await supabase
-      .from('hubs')
-      .select('*')
-      .eq('id_user', userId)
-      .is('deleted_at', null);
+    const profHubs = profRes.data;
+    const ownedHubs = ownedRes.data;
 
     const hubMap = new Map<string, HubRow>();
 
@@ -73,19 +74,23 @@ export class HubRepository {
     if (hubMap.size === 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const adminClient = createAdminClient();
       if (adminClient) {
-        const { data: adminProfHubs } = await adminClient
-          .from('professionisti')
-          .select(`hubs!inner(*)`)
-          .eq('id_user', userId)
-          .eq('is_active', true)
-          .is('deleted_at', null)
-          .is('hubs.deleted_at', null);
+        const [adminProfRes, adminOwnedRes] = await Promise.all([
+          adminClient
+            .from('professionisti')
+            .select(`hubs!inner(*)`)
+            .eq('id_user', userId)
+            .eq('is_active', true)
+            .is('deleted_at', null)
+            .is('hubs.deleted_at', null),
+          adminClient
+            .from('hubs')
+            .select('*')
+            .eq('id_user', userId)
+            .is('deleted_at', null),
+        ]);
 
-        const { data: adminOwnedHubs } = await adminClient
-          .from('hubs')
-          .select('*')
-          .eq('id_user', userId)
-          .is('deleted_at', null);
+        const adminProfHubs = adminProfRes.data;
+        const adminOwnedHubs = adminOwnedRes.data;
 
         if (adminProfHubs && Array.isArray(adminProfHubs)) {
           adminProfHubs.forEach((item: any) => {

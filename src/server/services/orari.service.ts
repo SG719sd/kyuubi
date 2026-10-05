@@ -13,7 +13,7 @@ export class OrariService {
 
   static async updateOrario(id: number, input: Partial<OrarioLavoroInput>) {
     const cleanedInput = Object.fromEntries(
-      Object.entries(input).filter(([_, v]) => v !== undefined)
+      Object.entries(input).filter(([, v]) => v !== undefined)
     );
     return await OrariRepository.update(id, cleanedInput);
   }

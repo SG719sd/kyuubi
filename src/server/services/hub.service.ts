@@ -1,12 +1,13 @@
 import { HubRepository } from "../repositories/hub.repository";
 import { HubRow, TablesInsert } from "@/types";
+import { cache } from "react";
 
 export class HubService {
-  static async checkSlugAvailability(slug: string): Promise<boolean> {
+  static checkSlugAvailability = cache(async (slug: string): Promise<boolean> => {
     const cleanSlug = slug.toLowerCase().trim();
     const existing = await HubRepository.findBySlug(cleanSlug);
     return !existing;
-  }
+  });
 
   static async createHub(data: TablesInsert<'hubs'>): Promise<HubRow> {
     const isAvailable = await this.checkSlugAvailability(data.slug);
@@ -20,14 +21,13 @@ export class HubService {
     });
   }
 
-  // --- METODO PER RECUPERARE GLI HUBS ---
-  static async getUserHubs(userId: string): Promise<HubRow[]> {
+  // --- METODO PER RECUPERARE GLI HUBS (con memoizzazione per richiesta) ---
+  static getUserHubs = cache(async (userId: string): Promise<HubRow[]> => {
     return await HubRepository.findUserHubs(userId);
-  }
+  });
 
-  // Aggiungi a src/server/services/hub.service.ts
-
-static async getHubWithProfessionista(slug: string, userId: string) {
-  return await HubRepository.findBySlugWithProfessionista(slug, userId);
-}
+  // --- METODO RECUPERO HUB CON PROFESSIONISTA (con memoizzazione per richiesta) ---
+  static getHubWithProfessionista = cache(async (slug: string, userId: string) => {
+    return await HubRepository.findBySlugWithProfessionista(slug, userId);
+  });
 }

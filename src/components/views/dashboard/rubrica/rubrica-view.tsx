@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Search, Phone, Mail, MapPin, User, Edit3, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import RubricaDrawer from './rubrica-drawer';
 import { deleteRubricaAction } from '@/server/actions/rubrica.actions';
@@ -22,20 +22,26 @@ export default function RubricaView({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
 
-  const filteredContatti = contatti.filter((c) => {
-    const term = search.toLowerCase();
-    const nomeCompleto = `${c.nome} ${c.cognome || ''}`.toLowerCase();
-    const tel = (c.telefono || '').toLowerCase();
-    const email = (c.email || '').toLowerCase();
-    return nomeCompleto.includes(term) || tel.includes(term) || email.includes(term);
-  });
+  const filteredContatti = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return contatti;
+    return contatti.filter((c) => {
+      const nomeCompleto = `${c.nome} ${c.cognome || ''}`.toLowerCase();
+      const tel = (c.telefono || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      return nomeCompleto.includes(term) || tel.includes(term) || email.includes(term);
+    });
+  }, [contatti, search]);
 
   const totalItems = filteredContatti.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
-  const paginatedContatti = filteredContatti.slice(startIndex, endIndex);
+
+  const paginatedContatti = useMemo(() => {
+    return filteredContatti.slice(startIndex, endIndex);
+  }, [filteredContatti, startIndex, endIndex]);
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
@@ -80,22 +86,22 @@ export default function RubricaView({
 
   return (
     <div className="space-y-6">
-      {/* Toolbar Gestionale (Allineata con gli altri moduli) */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="flex items-center gap-3 flex-1">
+      {/* Toolbar Gestionale Mobile-First */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="relative w-full max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Cerca per nome, cognome o telefono..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-slate-400"
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder-slate-400 min-h-[42px]"
             />
           </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500 font-medium px-1 shrink-0">
+          <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500 font-medium px-1 shrink-0">
             <span>
-              Totale: <span className="text-slate-900 dark:text-white font-bold">{totalItems}</span>
+              Totale: <span className="text-slate-900 dark:text-white font-bold tabular-nums">{totalItems}</span>
             </span>
             {totalItems > 12 && (
               <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-3">
@@ -114,15 +120,34 @@ export default function RubricaView({
           </div>
         </div>
 
-        {isAdmin && (
-          <button
-            onClick={handleOpenCreate}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuovo Contatto</span>
-          </button>
-        )}
+        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+          <div className="flex sm:hidden items-center gap-2 text-xs text-slate-500 font-medium">
+            <span>
+              Totale: <span className="text-slate-900 dark:text-white font-bold tabular-nums">{totalItems}</span>
+            </span>
+            {totalItems > 12 && (
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2 py-1"
+              >
+                <option value={12}>12</option>
+                <option value={24}>24</option>
+                <option value={48}>48</option>
+              </select>
+            )}
+          </div>
+
+          {isAdmin && (
+            <button
+              onClick={handleOpenCreate}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer min-h-[42px]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuovo Contatto</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Griglia Contatti */}
@@ -133,7 +158,7 @@ export default function RubricaView({
           <p className="text-xs text-slate-400 mt-1">Aggiungi nuovi contatti o modifica la ricerca.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {paginatedContatti.map((contatto) => (
             <div
               key={contatto.id}
@@ -206,14 +231,14 @@ export default function RubricaView({
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end items-center gap-2">
                   <button
                     onClick={() => handleOpenEdit(contatto)}
-                    className="p-2 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                    className="p-2 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
                     title="Modifica"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(contatto.id, `${contatto.nome} ${contatto.cognome || ''}`)}
-                    className="p-2 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all cursor-pointer"
+                    className="p-2 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
                     title="Elimina"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -229,16 +254,16 @@ export default function RubricaView({
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 px-5 py-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="text-xs text-slate-500 font-medium">
-            Visualizzati <span className="font-bold text-slate-900 dark:text-white">{startIndex + 1}</span> -{' '}
-            <span className="font-bold text-slate-900 dark:text-white">{endIndex}</span> di{' '}
-            <span className="font-bold text-slate-900 dark:text-white">{totalItems}</span> contatti
+            Visualizzati <span className="font-bold text-slate-900 dark:text-white tabular-nums">{startIndex + 1}</span> -{' '}
+            <span className="font-bold text-slate-900 dark:text-white tabular-nums">{endIndex}</span> di{' '}
+            <span className="font-bold text-slate-900 dark:text-white tabular-nums">{totalItems}</span> contatti
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safePage <= 1}
-              className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
               title="Pagina precedente"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -258,7 +283,7 @@ export default function RubricaView({
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => setCurrentPage(Number(pageNum))}
-                    className={`min-w-[32px] h-8 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    className={`min-w-[36px] h-9 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center ${
                       isActive
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'
@@ -273,7 +298,7 @@ export default function RubricaView({
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage >= totalPages}
-              className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
               title="Pagina successiva"
             >
               <ChevronRight className="w-4 h-4" />

@@ -14,7 +14,7 @@ export class ProfessionistiService {
 
   static async updateProfessionista(id: number, input: Partial<ProfessionistaInput>) {
     const cleanedInput = Object.fromEntries(
-      Object.entries(input).filter(([_, v]) => v !== undefined)
+      Object.entries(input).filter(([, v]) => v !== undefined)
     );
     return await ProfessionistiRepository.update(id, cleanedInput);
   }

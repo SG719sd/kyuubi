@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import OrarioDrawer from './orari-drawer';
 import { Building2, User, Clock, Plus, Edit2 } from 'lucide-react';
 
@@ -33,12 +33,23 @@ export default function OrariView({
   const [selectedGiorno, setSelectedGiorno] = useState<number | undefined>(undefined);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Filtriamo gli orari per l'entità attualmente selezionata
-  const filteredOrari = orari.filter((o) =>
-    selectedProfId === null
-      ? o.id_professionista === null
-      : o.id_professionista === selectedProfId
-  );
+  // Filtriamo gli orari per l'entità attualmente selezionata (memoizzato)
+  const filteredOrari = useMemo(() => {
+    return orari.filter((o) =>
+      selectedProfId === null
+        ? o.id_professionista === null
+        : o.id_professionista === selectedProfId
+    );
+  }, [orari, selectedProfId]);
+
+  // Mappa rapida per giorno della settimana
+  const orariByDay = useMemo(() => {
+    const map = new Map<number, any>();
+    filteredOrari.forEach((o) => {
+      map.set(o.giorno_settimana, o);
+    });
+    return map;
+  }, [filteredOrari]);
 
   const handleOpenCreate = (giornoIdx?: number) => {
     setSelectedOrario(null);
@@ -54,11 +65,11 @@ export default function OrariView({
 
   return (
     <div className="space-y-6">
-      {/* Selettore Contesto: Hub vs Professionisti */}
-      <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+      {/* Selettore Contesto: Hub vs Professionisti Mobile-First */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
         <button
           onClick={() => setSelectedProfId(null)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[40px] cursor-pointer ${
             selectedProfId === null
               ? 'bg-indigo-600 text-white shadow-xs'
               : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80'
@@ -68,31 +79,31 @@ export default function OrariView({
           <span>Orario Generale Hub</span>
         </button>
 
-        <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+        <div className="h-5 w-px bg-slate-200 dark:border-slate-800 hidden sm:block" />
 
-        <div className="flex items-center gap-2 overflow-x-auto py-1">
+        <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
           <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 whitespace-nowrap">Staff:</span>
           {professionisti.map((prof) => (
             <button
               key={prof.id}
               onClick={() => setSelectedProfId(prof.id)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap min-h-[40px] cursor-pointer ${
                 selectedProfId === prof.id
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80'
               }`}
             >
               <User className="w-3.5 h-3.5" />
-              <span>{prof.nome} {prof.cognome}</span>
+              <span>{prof.nome} {prof.cognome || ''}</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Griglia Settimanale */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {[1, 2, 3, 4, 5, 6, 0].map((giornoIdx) => {
-          const item = filteredOrari.find((o) => o.giorno_settimana === giornoIdx);
+          const item = orariByDay.get(giornoIdx);
 
           return (
             <div

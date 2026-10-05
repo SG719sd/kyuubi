@@ -14,7 +14,6 @@ import {
   Move,
   CheckCircle,
   AlertCircle,
-  UtensilsCrossed,
   ShieldCheck,
   UserPlus,
   Lock,
@@ -268,22 +267,6 @@ function resolveStaffColor(
   return '#64748B'; // Default colore Hub / Non assegnato
 }
 
-// Risolve il nome dell'elemento da catalogo
-function resolveItemTitle(it: any, servizi: any[], prodotti?: any[], piatti?: any[]): string {
-  if (it.titolo) return it.titolo;
-  if (it.tipo === 'servizio') {
-    const s = servizi?.find((srv) => srv.id === it.id_item);
-    if (s) return s.titolo;
-  } else if (it.tipo === 'prodotto' && prodotti) {
-    const p = prodotti.find((prod) => prod.id === it.id_item);
-    if (p) return p.titolo;
-  } else if (it.tipo === 'piatto' && piatti) {
-    const pt = piatti.find((piat) => piat.id === it.id_item);
-    if (pt) return pt.titolo;
-  }
-  return `${it.tipo.charAt(0).toUpperCase() + it.tipo.slice(1)} #${it.id_item}`;
-}
-
 // Rileva se una prenotazione è un ordine, piatto, prodotto o senza orario fisso
 function isDishOrProductOrUntimed(p: PrenotazioneWithDetails): boolean {
   // Se non c'è timestamp valido di inizio, è forzatamente senza orario
@@ -318,10 +301,6 @@ function getMonday(d: Date): Date {
 export default function AgendaClassica({
   prenotazioni,
   professionisti,
-  clienti: _clienti,
-  servizi,
-  prodotti = [],
-  piatti = [],
   hubId,
   hubSlug,
   isAdmin = true,
@@ -440,29 +419,6 @@ export default function AgendaClassica({
 
     return professionisti;
   }, [selectedStaffFilter, professionisti, unassignedCount]);
-
-  // Ordini, Piatti e Prodotti del giorno (senza orario specifico)
-  const untimedOrdersForDay = useMemo(() => {
-    return prenotazioni.filter((p) => {
-      const pDate = getBookingLocalDate(p.tms_inizio || p.created_at);
-      if (pDate !== currentDateStr) return false;
-      return isDishOrProductOrUntimed(p);
-    });
-  }, [prenotazioni, currentDateStr]);
-
-  // Ordini, Piatti e Prodotti per ciascun giorno della settimana (per vista settimanale)
-  const untimedOrdersForWeek = useMemo(() => {
-    const map: { [dayStr: string]: PrenotazioneWithDetails[] } = {};
-    weekDays.forEach((day) => {
-      const dayStr = getBookingLocalDate(day);
-      map[dayStr] = prenotazioni.filter((p) => {
-        const pDate = getBookingLocalDate(p.tms_inizio || p.created_at);
-        if (pDate !== dayStr) return false;
-        return isDishOrProductOrUntimed(p);
-      });
-    });
-    return map;
-  }, [prenotazioni, weekDays]);
 
   // Rileva altre date che contengono prenotazioni per aiutare l'utente a navigare
   const otherDatesWithBookings = useMemo(() => {
@@ -646,14 +602,14 @@ export default function AgendaClassica({
       )}
 
       {/* Header comandi Agenda */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-4 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3 sm:p-3.5 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         {/* Navigazione Date con Date Picker interattivo */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-2xl p-1 bg-slate-50 dark:bg-slate-950">
+          <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl p-0.5 bg-slate-50 dark:bg-slate-950">
             <button
               type="button"
               onClick={handlePrev}
-              className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-300"
+              className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all cursor-pointer text-slate-700 dark:text-slate-300"
               title="Precedente"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -661,14 +617,14 @@ export default function AgendaClassica({
             <button
               type="button"
               onClick={handleToday}
-              className="px-3 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+              className="px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
             >
               Oggi
             </button>
             <button
               type="button"
               onClick={handleNext}
-              className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer text-slate-700 dark:text-slate-300"
+              className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-lg transition-all cursor-pointer text-slate-700 dark:text-slate-300"
               title="Successivo"
             >
               <ChevronRight className="w-4 h-4" />
@@ -676,7 +632,7 @@ export default function AgendaClassica({
           </div>
 
           {/* Date Picker Input */}
-          <div className="flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-2.5 py-1">
+          <div className="flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1">
             <input
               type="date"
               value={currentDateStr}
@@ -696,9 +652,9 @@ export default function AgendaClassica({
         </div>
 
         {/* Controlli Vista (Giorno / Settimana) e Filtro Professionista */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap justify-between lg:justify-end">
           {/* Selettore Operatore per la vista */}
-          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2.5 py-1 rounded-2xl">
+          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 rounded-xl">
             <User className="w-3.5 h-3.5 text-indigo-500" />
             <select
               value={selectedStaffFilter}
@@ -723,11 +679,11 @@ export default function AgendaClassica({
           </div>
 
           {/* Switch Giorno / Settimana */}
-          <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex items-center gap-1">
+          <div className="bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => setSubView('giorno')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 subView === 'giorno'
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -738,7 +694,7 @@ export default function AgendaClassica({
             <button
               type="button"
               onClick={() => setSubView('settimana')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 subView === 'settimana'
                   ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -748,41 +704,39 @@ export default function AgendaClassica({
             </button>
           </div>
 
-          {/* Pulsante rapido Aggiungi Ordine / Piatto / Prodotto */}
-          <button
-            type="button"
-            onClick={() =>
-              handleSlotClick({
-                date: currentDateStr,
-                senzaOrario: true,
-                itemType: 'piatto',
-              })
-            }
-            className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs font-bold hover:bg-amber-100 transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Aggiungi piatto o prodotto senza orario fisso"
-          >
-            <UtensilsCrossed className="w-3.5 h-3.5" />
-            <span>+ Piatto / Prodotto</span>
-          </button>
-
-          {!isAdmin && (
-            <div className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
-              <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span>Sola Lettura (Admin)</span>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={() =>
+                onSelectSlot({
+                  date: currentDateStr,
+                  time: '09:00',
+                  staffId: typeof selectedStaffFilter === 'number' ? selectedStaffFilter : undefined,
+                  itemType: 'servizio',
+                })
+              }
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Appuntamento</span>
+            </button>
+          ) : (
+            <div className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-semibold flex items-center gap-1 shadow-2xs">
+              <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Sola Lettura</span>
             </div>
           )}
         </div>
       </div>
 
       {/* BANNER SUGGERIMENTO DATE: Mostra se la data corrente non ha prenotazioni ma ci sono prenotazioni in altre date */}
-      {untimedOrdersForDay.length === 0 &&
-        prenotazioni.filter((p) => getBookingLocalDate(p.tms_inizio) === currentDateStr).length === 0 &&
+      {prenotazioni.filter((p) => getBookingLocalDate(p.tms_inizio) === currentDateStr).length === 0 &&
         otherDatesWithBookings.length > 0 && (
           <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300">
               <CalendarIcon className="w-4 h-4 text-indigo-500 shrink-0" />
               <span>
-                Nessuna prenotazione per <strong>{formattedTitle}</strong>. Trovate prenotazioni in altre date:
+                Nessun appuntamento per <strong>{formattedTitle}</strong>. Date con prenotazioni:
               </span>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -799,170 +753,6 @@ export default function AgendaClassica({
             </div>
           </div>
         )}
-
-      {/* SEZIONE SPECIALE: ORDINI, PIATTI & PRODOTTI (SENZA ORARIO FISSO) */}
-      {subView === 'giorno' && (
-        <div className="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 rounded-3xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-xl">
-                <UtensilsCrossed className="w-4 h-4" />
-              </span>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                  Ordini, Piatti & Prodotti del Giorno
-                </h3>
-                <p className="text-[11px] text-amber-700/80 dark:text-amber-400">
-                  Elementi senza orario fisso o ordini di piatti e prodotti registrati per oggi ({untimedOrdersForDay.length})
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                handleSlotClick({
-                  date: currentDateStr,
-                  senzaOrario: true,
-                  itemType: 'piatto',
-                })
-              }
-              className="text-xs font-bold text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Aggiungi</span>
-            </button>
-          </div>
-
-          {untimedOrdersForDay.length === 0 ? (
-            <div className="p-3 bg-white/60 dark:bg-slate-900/40 rounded-2xl border border-amber-100 dark:border-amber-950/60 text-center text-xs text-amber-800/60 dark:text-amber-400/60">
-              Nessun piatto, prodotto o ordine del giorno registrato per questa data.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {untimedOrdersForDay.map((order) => {
-                const clientName = order.rubrica
-                  ? `${order.rubrica.nome} ${order.rubrica.cognome || ''}`.trim()
-                  : 'Cliente Banco';
-                const phone = order.rubrica?.telefono;
-
-                const hasDishes = order.items?.some((it) => it.tipo === 'piatto');
-                const hasProducts = order.items?.some((it) => it.tipo === 'prodotto');
-
-                return (
-                  <div
-                    key={order.id}
-                    onClick={() => onEditPrenotazione(order)}
-                    className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/60 shadow-2xs hover:shadow-md transition-all cursor-pointer space-y-2 group"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {hasDishes && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 flex items-center gap-1">
-                              🍕 Piatto
-                            </span>
-                          )}
-                          {hasProducts && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                              🛍️ Prodotto
-                            </span>
-                          )}
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                              order.stato === 'completata'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                : order.stato === 'confermata'
-                                ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
-                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                            }`}
-                          >
-                            {order.stato}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {order.rubrica?.id_user ? (
-                            <span title="Account Registrato Autonomo">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            </span>
-                          ) : order.rubrica ? (
-                            <span title="Registrato a mano dallo staff">
-                              <UserPlus className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                            </span>
-                          ) : (
-                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          )}
-                          <h4 className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                            {clientName}
-                          </h4>
-                        </div>
-                        {order.titolo && order.titolo !== clientName && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                            {order.titolo}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="text-xs font-extrabold text-slate-900 dark:text-white block">
-                          € {Number(order.totale || 0).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Items preview */}
-                    {order.items && order.items.length > 0 && (
-                      <div className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 p-1.5 rounded-xl space-y-0.5">
-                        {order.items.map((it, idx) => (
-                          <div key={idx} className="flex justify-between items-center text-[10px]">
-                            <span className="truncate">
-                              {it.quantita}x {resolveItemTitle(it, servizi, prodotti, piatti)}
-                            </span>
-                            <span className="font-semibold shrink-0">€ {Number(it.prezzo).toFixed(2)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Footer con contatti rapidi */}
-                    <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                      {(() => {
-                        const staffColor = resolveStaffColor(order, professionisti);
-                        return (
-                          <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[140px] flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: staffColor }} />
-                            <span className="truncate">{order.professionisti ? order.professionisti.nome : 'Hub Generale'}</span>
-                          </span>
-                        );
-                      })()}
-                      {phone && (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => callPhone(e, phone)}
-                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition-colors cursor-pointer"
-                            title="Chiama"
-                          >
-                            <Phone className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => openWhatsApp(e, order)}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl transition-colors cursor-pointer"
-                            title="WhatsApp"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* SELETTORE RAPIDO OPERATORE (Ottimizzato per Smartphone & Tablet) */}
       {subView === 'giorno' && professionisti.length > 0 && (
@@ -1302,9 +1092,12 @@ export default function AgendaClassica({
                                         </div>
                                       )}
                                     </div>
-                                    <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 shrink-0 font-mono">
-                                      €{Number(b.totale || 0).toFixed(0)}
-                                    </span>
+                                    <span
+                                      className={`w-2 h-2 rounded-full shrink-0 ${
+                                        isCompletata ? 'bg-emerald-500' : isConfermata ? 'bg-indigo-500' : 'bg-amber-500'
+                                      }`}
+                                      title={b.stato}
+                                    />
                                   </div>
                                 </div>
                               ) : (
@@ -1318,8 +1111,6 @@ export default function AgendaClassica({
                                         <span className="text-[9px] opacity-70 font-semibold font-mono">({span.duration}m)</span>
                                       </span>
                                       <div className="flex items-center gap-1">
-                                        {hasDishes && <span title="Contiene Piatti">🍕</span>}
-                                        {hasProducts && <span title="Contiene Prodotti">🛍️</span>}
                                         <Move className="w-3 h-3 opacity-40 hover:opacity-100 cursor-grab" />
                                       </div>
                                     </div>
@@ -1344,8 +1135,8 @@ export default function AgendaClassica({
                                   </div>
 
                                   <div className="mt-1.5 pt-1.5 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between">
-                                    <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 font-mono">
-                                      €{Number(b.totale || 0).toFixed(2)}
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                      {b.items && b.items.length > 0 ? `${b.items.length} ${b.items.length === 1 ? 'servizio' : 'servizi'}` : ''}
                                     </span>
 
                                     <div className="flex items-center gap-1.5">
@@ -1439,56 +1230,6 @@ export default function AgendaClassica({
                       >
                         {day.getDate()}
                       </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* RIGA SPECIALE SETTIMANALE: Ordini & Prodotti dell'intera giornata */}
-              <div
-                className="grid border-b border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20 min-h-[48px]"
-                style={{ gridTemplateColumns: `75px repeat(7, minmax(130px, 1fr))` }}
-              >
-                <div className="p-2 border-r border-amber-200/80 dark:border-amber-900/50 text-[10px] font-bold text-amber-800 dark:text-amber-300 flex items-center justify-center text-center sticky left-0 z-20 bg-amber-100 dark:bg-amber-950 shadow-xs">
-                  📦 Ordini
-                </div>
-
-                {weekDays.map((day) => {
-                  const dayStr = getBookingLocalDate(day);
-                  const dayOrders = untimedOrdersForWeek[dayStr] || [];
-
-                  return (
-                    <div
-                      key={`untimed-${dayStr}`}
-                      className="p-1.5 border-r border-amber-200/60 dark:border-amber-900/40 last:border-r-0 space-y-1"
-                    >
-                      {dayOrders.map((ord) => (
-                        <div
-                          key={ord.id}
-                          onClick={() => onEditPrenotazione(ord)}
-                          className="px-2 py-1 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 rounded-lg shadow-2xs text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors flex items-center justify-between gap-1"
-                          title={ord.titolo || 'Ordine del giorno'}
-                        >
-                          <span className="truncate">🍽️ {ord.titolo || 'Ordine'}</span>
-                          <span className="shrink-0 text-amber-700 dark:text-amber-400">
-                            €{Number(ord.totale || 0).toFixed(0)}
-                          </span>
-                        </div>
-                      ))}
-                      {dayOrders.length === 0 && (
-                        <div
-                          onClick={() =>
-                            handleSlotClick({
-                              date: dayStr,
-                              senzaOrario: true,
-                              itemType: 'piatto',
-                            })
-                          }
-                          className="h-full min-h-[30px] flex items-center justify-center text-[10px] text-amber-700/50 dark:text-amber-400/50 hover:bg-amber-100/50 dark:hover:bg-amber-950/30 rounded cursor-pointer transition-colors"
-                        >
-                          + aggiungi
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -1635,8 +1376,6 @@ export default function AgendaClassica({
                             ? `${b.rubrica.nome} ${b.rubrica.cognome || ''}`.trim()
                             : 'Cliente';
                           const phone = b.rubrica?.telefono;
-                          const hasDishes = b.items?.some((it) => it.tipo === 'piatto');
-                          const hasProducts = b.items?.some((it) => it.tipo === 'prodotto');
 
                           const leftPercent = (lane / totalLanes) * 100;
                           const widthPercent = 100 / totalLanes;
@@ -1716,9 +1455,12 @@ export default function AgendaClassica({
 
                                   <div className="text-[10px] text-slate-600 dark:text-slate-400 truncate flex items-center justify-between leading-none">
                                     <span className="truncate opacity-75">{b.titolo && b.titolo !== clientName ? b.titolo : ''}</span>
-                                    <span className="font-bold text-[9px] text-slate-800 dark:text-slate-200 font-mono">
-                                      €{Number(b.totale || 0).toFixed(0)}
-                                    </span>
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                        b.stato === 'completata' ? 'bg-emerald-500' : b.stato === 'confermata' ? 'bg-indigo-500' : 'bg-amber-500'
+                                      }`}
+                                      title={b.stato}
+                                    />
                                   </div>
                                 </div>
                               ) : (
@@ -1731,8 +1473,6 @@ export default function AgendaClassica({
                                         <span>{span.displayStart} - {span.displayEnd}</span>
                                       </span>
                                       <div className="flex items-center gap-1">
-                                        {hasDishes && <span title="Piatto">🍕</span>}
-                                        {hasProducts && <span title="Prodotto">🛍️</span>}
                                         <span className="text-[9px] opacity-70 font-semibold font-mono">
                                           {span.duration}m
                                         </span>
@@ -1778,8 +1518,8 @@ export default function AgendaClassica({
                                   </div>
 
                                   <div className="mt-1 pt-1 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between text-[10px]">
-                                    <span className="font-bold text-slate-800 dark:text-slate-200 font-mono">
-                                      €{Number(b.totale || 0).toFixed(0)}
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                      {b.items && b.items.length > 0 ? `${b.items.length} ${b.items.length === 1 ? 'servizio' : 'servizi'}` : ''}
                                     </span>
 
                                     {phone && (

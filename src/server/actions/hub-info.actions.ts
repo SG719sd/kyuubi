@@ -9,9 +9,7 @@ import {
   UpdateHubGeneralInput,
   UpdateHubBillingInput,
   UpdateHubStyleSettingsInput,
-  updateHubStyleSettingsSchema,
 } from '@/lib/validations/hub-info';
-import { createClient } from '@/utils/supabase/server';
 
 export async function updateHubStyleSettingsAction(
   slugHub: string,

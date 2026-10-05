@@ -4,7 +4,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
-import { createClient } from '@/utils/supabase/server';
+import { getCurrentUser } from '@/utils/supabase/server';
 import { HubService } from '@/server/services/hub.service';
 import { HubRow } from '@/types';
 
@@ -151,11 +151,7 @@ export default async function RootLayout({
   let user = null;
   let userHubs: HubRow[] = [];
   try {
-    const supabase = await createClient();
-    const {
-      data,
-    } = await supabase.auth.getUser();
-    user = data?.user ?? null;
+    user = await getCurrentUser();
     if (user) {
       userHubs = await HubService.getUserHubs(user.id);
     }

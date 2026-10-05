@@ -41,13 +41,13 @@ export function Header({
   const isInsideHub = Boolean(currentSlug);
   const isHubHomePage = currentSlug ? pathname === `/dashboard/hubs/${currentSlug}` : false;
 
-  // Sincronizza o recupera gli Hub se non passati o cambiati
+  // Sincronizza o recupera gli Hub solo se non forniti dal server
   useEffect(() => {
-    if (userHubs && userHubs.length > 0) {
+    if (Array.isArray(userHubs)) {
       setHubsList(userHubs);
     } else if (user) {
       getUserHubsAction().then((res) => {
-        if (res.success && res.data) {
+        if (res?.success && res.data) {
           setHubsList(res.data);
         }
       });

@@ -27,11 +27,11 @@ export function HubShareActions({ slug, nome }: HubShareActionsProps) {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: slug,
-          text: `Scopri ${slug} su EazyHubs: ${shareUrl}`,
+          title: nome || slug,
+          text: `Scopri ${nome || slug} su EazyHubs: ${shareUrl}`,
           url: shareUrl,
         });
-      } catch (err) {
+      } catch {
         // L'utente ha annullato la condivisione
       }
     } else {

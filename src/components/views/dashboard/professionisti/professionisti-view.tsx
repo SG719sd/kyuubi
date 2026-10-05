@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ProfessionistaDrawer from './professionista-drawer';
+import { Search, Plus } from 'lucide-react';
 
 export default function ProfessionistiView({
   professionisti,
@@ -18,11 +19,15 @@ export default function ProfessionistiView({
   const [selectedProf, setSelectedProf] = useState<any | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  const filtered = professionisti.filter(
-    (p) =>
-      p.nome.toLowerCase().includes(search.toLowerCase()) ||
-      p.ruolo.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return professionisti;
+    return professionisti.filter(
+      (p) =>
+        p.nome?.toLowerCase().includes(q) ||
+        p.ruolo?.toLowerCase().includes(q)
+    );
+  }, [professionisti, search]);
 
   const handleOpenCreate = () => {
     setSelectedProf(null);
@@ -36,36 +41,45 @@ export default function ProfessionistiView({
 
   return (
     <div className="space-y-6">
-      {/* Toolbar Gestionale */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div className="flex items-center gap-3 flex-1">
+      {/* Toolbar Gestionale Mobile-First */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="relative w-full max-w-md">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400 text-xs">🔍</span>
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </span>
             <input
               type="text"
               placeholder="Cerca per nome o ruolo..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all min-h-[42px]"
             />
           </div>
-          <div className="text-xs text-slate-500 font-medium px-1 shrink-0">
-            Totale: <span className="text-slate-900 dark:text-white font-bold">{filtered.length}</span>
+          <div className="text-xs text-slate-500 font-medium px-1 shrink-0 whitespace-nowrap hidden sm:block">
+            Totale: <span className="text-slate-900 dark:text-white font-bold tabular-nums">{filtered.length}</span>
           </div>
         </div>
 
-        {isAdmin && (
-          <button
-            onClick={handleOpenCreate}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-          >
-            <span className="text-sm font-bold">+</span> Nuovo Professionista
-          </button>
-        )}
+        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+          <span className="text-xs text-slate-500 font-medium px-1 sm:hidden">
+            Totale: <span className="text-slate-900 dark:text-white font-bold tabular-nums">{filtered.length}</span>
+          </span>
+
+          {isAdmin && (
+            <button
+              onClick={handleOpenCreate}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer min-h-[42px]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuovo Professionista</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Griglia Card Professionisti */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
         {filtered.map((prof) => (
           <div
             key={prof.id}

@@ -23,7 +23,7 @@ export class PiattiService {
 
   static async updatePiatto(id: number, input: Partial<PiattoInput>) {
     const cleanedInput = Object.fromEntries(
-      Object.entries(input).filter(([_, v]) => v !== undefined)
+      Object.entries(input).filter(([, v]) => v !== undefined)
     );
     return await PiattiRepository.update(id, cleanedInput);
   }
