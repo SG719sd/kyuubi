@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, UtensilsCrossed, Image as ImageIcon } from "lucide-react";
+import { X, UtensilsCrossed, Trash2 } from "lucide-react";
+import { ImageFallback } from "@/components/ui/image-fallback";
 import { compressAndConvertToWebP } from "@/lib/image-optimizer";
 import { getHubStoragePath } from "@/types/storage-paths";
 import {
@@ -11,6 +12,7 @@ import {
   updateImmaginePiattoAction,
 } from "@/server/actions/piatti.actions";
 import { uploadMediaAction } from "@/server/actions/storage.actions";
+
 
 export default function PiattoDrawer({
   isOpen,
@@ -154,37 +156,41 @@ export default function PiattoDrawer({
 
     // 2. Elaborazione e Upload Immagine via Server Action
     if (imageFile && piattoId) {
-      try {
-        // Compressione e conversione WebP
-        const webpBlob = await compressAndConvertToWebP(
-          imageFile,
-          800,
-          800,
-          0.82,
-        );
-        const fileName = `${piattoId}.webp`;
-        const storagePath = getHubStoragePath.piatto(hubId, fileName);
+       try {
+         // Compressione e conversione WebP
+         const webpBlob = await compressAndConvertToWebP(
+           imageFile,
+           800,
+           800,
+           0.82,
+         );
+         const fileName = `${piattoId}_${Date.now()}.webp`;
+         const storagePath = getHubStoragePath.piatto(hubId, fileName);
 
-        const formData = new FormData();
-        formData.append("file", webpBlob, fileName);
-        formData.append("storagePath", storagePath);
+         const formData = new FormData();
+         formData.append("file", webpBlob, fileName);
+         formData.append("storagePath", storagePath);
 
-        const uploadRes = await uploadMediaAction(formData);
-        if (!uploadRes.success || !uploadRes.url) {
-          throw new Error(uploadRes.error || "Errore caricamento immagine");
-        }
+         const uploadRes = await uploadMediaAction(formData);
+         if (!uploadRes.success || !uploadRes.url) {
+           throw new Error(uploadRes.error || "Errore caricamento immagine");
+         }
 
-        const displayUrl = uploadRes.url;
+         const displayUrl = uploadRes.url;
 
-        // Aggiornamento URL nel database (salviamo l'URL con timestamp per invalidare la cache ovunque)
-        await updateImmaginePiattoAction(piattoId, displayUrl, hubSlug);
-      } catch (imgErr: any) {
-        setErrorMsg(
-          `Piatto salvato, ma errore upload immagine: ${imgErr.message}`,
-        );
-        return;
-      }
-    }
+         // Aggiornamento URL nel database (salviamo l'URL con timestamp per invalidare la cache ovunque)
+         await updateImmaginePiattoAction(piattoId, displayUrl, hubSlug);
+       } catch (imgErr: any) {
+         setErrorMsg(
+           `Piatto salvato, ma errore upload immagine: ${imgErr.message}`,
+         );
+         return;
+       }
+     } else if (initialData?.immagine && !imagePreview && !imageFile && piattoId) {
+       // L'utente ha rimosso l'immagine esistente
+       await updateImmaginePiattoAction(piattoId, '', hubSlug);
+     }
+
 
     // 3. Refresh ed esecuzione callback
     startTransition(() => {
@@ -239,15 +245,27 @@ export default function PiattoDrawer({
                 Immagine Piatto
               </label>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
-                  {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-slate-400 dark:text-slate-600" />
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                  <ImageFallback
+                    src={imagePreview}
+                    alt="Preview"
+                    fallbackType="piatto"
+                    className="w-full h-full object-cover"
+                    containerClassName="w-full h-full flex items-center justify-center"
+                  />
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview("");
+                        setImageFile(null);
+                        setForm((prev) => ({ ...prev, immagine: "" }));
+                      }}
+                      className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      title="Rimuovi immagine"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-400" />
+                    </button>
                   )}
                 </div>
                 <div className="flex-1">
@@ -263,6 +281,7 @@ export default function PiattoDrawer({
                 </div>
               </div>
             </div>
+
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">

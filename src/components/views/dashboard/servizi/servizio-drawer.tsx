@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, Wrench, Image as ImageIcon } from "lucide-react";
+import { X, Wrench, Trash2 } from "lucide-react";
+import { ImageFallback } from "@/components/ui/image-fallback";
 import { compressAndConvertToWebP } from "@/lib/image-optimizer";
 import { getHubStoragePath } from "@/types/storage-paths";
 import {
@@ -11,6 +12,7 @@ import {
   updateImmagineServizioAction,
 } from "@/server/actions/servizi.actions";
 import { uploadMediaAction } from "@/server/actions/storage.actions";
+
 
 export default function ServizioDrawer({
   isOpen,
@@ -154,7 +156,7 @@ export default function ServizioDrawer({
           800,
           0.82,
         );
-        const fileName = `${servizioId}.webp`;
+        const fileName = `${servizioId}_${Date.now()}.webp`;
         const storagePath = getHubStoragePath.servizio(hubId, fileName);
 
         const formData = new FormData();
@@ -176,7 +178,11 @@ export default function ServizioDrawer({
         );
         return;
       }
+    } else if (initialData?.immagine && !imagePreview && !imageFile && servizioId) {
+      // L'utente ha rimosso l'immagine esistente
+      await updateImmagineServizioAction(servizioId, '', hubSlug);
     }
+
 
     // 3. Refresh interfaccia e chiusura modal
     startTransition(() => {
@@ -232,15 +238,27 @@ export default function ServizioDrawer({
                 Immagine Servizio
               </label>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center shrink-0">
-                  {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-slate-400 dark:text-slate-600" />
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                  <ImageFallback
+                    src={imagePreview}
+                    alt="Preview"
+                    fallbackType="servizio"
+                    className="w-full h-full object-cover"
+                    containerClassName="w-full h-full flex items-center justify-center"
+                  />
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview("");
+                        setImageFile(null);
+                        setForm((prev) => ({ ...prev, immagine: "" }));
+                      }}
+                      className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      title="Rimuovi immagine"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-400" />
+                    </button>
                   )}
                 </div>
                 <div className="flex-1">
@@ -256,6 +274,7 @@ export default function ServizioDrawer({
                 </div>
               </div>
             </div>
+
 
             <div>
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">

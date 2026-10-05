@@ -28,19 +28,22 @@ export class ProdottiService {
     return await ProdottiRepository.update(id, cleanedInput);
   }
 
-  static async updateImmagineProdotto(id: number, url: string) {
+  static async updateImmagineProdotto(id: number, url: string | null) {
+    const formattedUrl = url && url.trim() ? url.trim() : null;
     const existing = await ProdottiRepository.getById(id);
-    if (existing?.immagine && existing.immagine !== url) {
-      await StorageService.deleteFile(existing.immagine);
+    const updated = await ProdottiRepository.updateImmagine(id, formattedUrl);
+    if (existing?.immagine && existing.immagine !== formattedUrl) {
+      StorageService.cleanupOldMedia(existing.immagine, formattedUrl);
     }
-    return await ProdottiRepository.updateImmagine(id, url);
+    return updated;
   }
 
   static async deleteProdotto(id: number) {
     const existing = await ProdottiRepository.getById(id);
     if (existing?.immagine) {
-      await StorageService.deleteFile(existing.immagine);
+      StorageService.cleanupOldMedia(existing.immagine);
     }
     return await ProdottiRepository.softDelete(id);
   }
+
 }

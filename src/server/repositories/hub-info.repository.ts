@@ -35,6 +35,22 @@ export class HubInfoRepository {
   }
 
   /**
+   * Recupera un Hub per ID
+   */
+  static async getHubById(hubId: string): Promise<HubRow | null> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('hubs')
+      .select('*')
+      .eq('id', hubId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as unknown as HubRow;
+  }
+
+  /**
    * Aggiorna la tabella `hubs`
    */
   static async updateHub(hubId: string, payload: HubUpdate): Promise<HubRow> {

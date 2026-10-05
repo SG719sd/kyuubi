@@ -1,4 +1,5 @@
 import { HubInfoRepository } from '../repositories/hub-info.repository';
+import { StorageService } from './storage.service';
 import {
   UpdateHubGeneralInput,
   UpdateHubBillingInput,
@@ -40,6 +41,11 @@ export class HubInfoService {
   }
 
   static async updateLogo(hubId: string, logoUrl: string | null) {
-    return await HubInfoRepository.updateHub(hubId, { logo_url: logoUrl });
+    const hub = await HubInfoRepository.getHubById(hubId);
+    const updated = await HubInfoRepository.updateHub(hubId, { logo_url: logoUrl });
+    if (hub?.logo_url && hub.logo_url !== logoUrl) {
+      StorageService.cleanupOldMedia(hub.logo_url, logoUrl);
+    }
+    return updated;
   }
 }

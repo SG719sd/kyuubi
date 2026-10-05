@@ -12,6 +12,8 @@ import {
   TrendingUp,
   Building2
 } from 'lucide-react';
+import { ImageFallback } from '@/components/ui/image-fallback';
+
 
 export default async function DashboardPage() {
   const authUser = await getCurrentUser();
@@ -112,16 +114,15 @@ export default async function DashboardPage() {
                   <div>
                     {/* LOGO OPPURE ICONA DI FALLBACK */}
                     <div className="w-12 h-12 rounded-2xl bg-sky-100 dark:bg-sky-600/10 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform overflow-hidden border border-slate-200/60 dark:border-slate-800 shrink-0">
-                      {hub.logo_url ? (
-                        <img 
-                          src={hub.logo_url} 
-                          alt={hub.nome} 
-                          className="w-full h-full object-cover rounded-2xl" 
-                        />
-                      ) : (
-                        <Store className="w-6 h-6" />
-                      )}
+                      <ImageFallback
+                        src={hub.logo_url}
+                        alt={hub.nome}
+                        fallbackType="store"
+                        className="w-full h-full object-cover rounded-2xl"
+                        containerClassName="w-full h-full flex items-center justify-center"
+                      />
                     </div>
+
 
                     <h3 className="text-xl font-extrabold text-slate-900 dark:text-white mb-1">{hub.nome}</h3>
                     <p className="text-xs font-mono text-sky-600 dark:text-sky-400/80 mb-3">eazyhubs.com/{hub.slug}</p>

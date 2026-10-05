@@ -28,19 +28,22 @@ export class PiattiService {
     return await PiattiRepository.update(id, cleanedInput);
   }
 
-  static async updateImmaginePiatto(id: number, url: string) {
+  static async updateImmaginePiatto(id: number, url: string | null) {
+    const formattedUrl = url && url.trim() ? url.trim() : null;
     const existing = await PiattiRepository.getById(id);
-    if (existing?.immagine && existing.immagine !== url) {
-      await StorageService.deleteFile(existing.immagine);
+    const updated = await PiattiRepository.updateImmagine(id, formattedUrl);
+    if (existing?.immagine && existing.immagine !== formattedUrl) {
+      StorageService.cleanupOldMedia(existing.immagine, formattedUrl);
     }
-    return await PiattiRepository.updateImmagine(id, url);
+    return updated;
   }
 
   static async deletePiatto(id: number) {
     const existing = await PiattiRepository.getById(id);
     if (existing?.immagine) {
-      await StorageService.deleteFile(existing.immagine);
+      StorageService.cleanupOldMedia(existing.immagine);
     }
     return await PiattiRepository.softDelete(id);
   }
+
 }

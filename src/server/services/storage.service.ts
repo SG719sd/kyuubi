@@ -113,6 +113,51 @@ export class StorageService {
   }
 
   /**
+   * Estrae il percorso normalizzato all'interno del bucket, ripulendo prefissi e query param
+   */
+  static extractStoragePath(filePathOrUrl: string): string {
+    if (!filePathOrUrl) return '';
+    const clean = filePathOrUrl.split('?')[0];
+    for (const b of [this.PRIMARY_BUCKET, ...this.FALLBACK_BUCKETS]) {
+      if (clean.includes(b)) {
+        const parts = clean.split(`${b}/`);
+        if (parts.length > 1) {
+          return parts[1];
+        }
+      }
+    }
+    return clean;
+  }
+
+  /**
+   * Pulizia asincrona e non bloccante della vecchia immagine se sostituita o rimossa.
+   * Evita di eliminare il file se il target è identico (sovrascrittura o stesso path).
+   */
+  static async cleanupOldMedia(oldUrl: string | null | undefined, newUrl?: string | null): Promise<void> {
+    if (!oldUrl) return;
+    try {
+      const oldPath = this.extractStoragePath(oldUrl);
+      const newPath = newUrl ? this.extractStoragePath(newUrl) : '';
+
+      // Non eliminare se il file è identico o lo stesso percorso normalizzato
+      if (oldPath && newPath && oldPath === newPath) {
+        return;
+      }
+
+      if (oldPath) {
+        // Esecuzione asincrona non bloccante
+        Promise.resolve().then(async () => {
+          await this.deleteFile(oldPath);
+        }).catch((err) => {
+          console.warn('[StorageService] Errore rimozione asincrona media orfano:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('[StorageService] Errore in cleanupOldMedia:', e);
+    }
+  }
+
+  /**
    * Elimina un file dallo storage a partire dal suo percorso relativo o URL pubblico.
    */
   static async deleteFile(filePathOrUrl: string): Promise<boolean> {
@@ -121,17 +166,7 @@ export class StorageService {
     try {
       const supabase = await this.getClient();
       const bucket = await this.resolveBucket(supabase);
-      let path = filePathOrUrl;
-
-      for (const b of [this.PRIMARY_BUCKET, ...this.FALLBACK_BUCKETS]) {
-        if (filePathOrUrl.includes(b)) {
-          const parts = filePathOrUrl.split(`${b}/`);
-          if (parts.length > 1) {
-            path = parts[1].split('?')[0];
-            break;
-          }
-        }
-      }
+      const path = this.extractStoragePath(filePathOrUrl);
 
       const { error } = await supabase.storage.from(bucket).remove([path]);
       if (error) {
@@ -145,3 +180,4 @@ export class StorageService {
     }
   }
 }
+

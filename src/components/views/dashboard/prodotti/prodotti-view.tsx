@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react';
 import ProdottoDrawer from './prodotto-drawer';
 import { Search, Plus } from 'lucide-react';
+import { ImageFallback } from '@/components/ui/image-fallback';
+
 
 export default function ProdottiView({
   prodotti,
@@ -106,13 +108,16 @@ export default function ProdottiView({
             {/* Info Principali */}
             <div className="flex items-start gap-3.5 pr-14">
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 overflow-hidden flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-400 shrink-0 shadow-inner">
-                {prod.immagine ? (
-                  <img src={prod.immagine} alt={prod.titolo} className="w-full h-full object-cover" loading="lazy" />
-                ) : (
-                  <span className="text-lg">📦</span>
-                )}
+                <ImageFallback
+                  src={prod.immagine}
+                  alt={prod.titolo}
+                  fallbackType="prodotto"
+                  className="w-full h-full object-cover"
+                  containerClassName="w-full h-full flex items-center justify-center"
+                />
               </div>
               <div className="min-w-0">
+
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white truncate">{prod.titolo}</h3>
                 <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium mt-0.5 truncate">
                   {prod.categoria || 'Generale'}{prod.brand ? ` · ${prod.brand}` : ''}

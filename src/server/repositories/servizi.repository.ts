@@ -73,7 +73,7 @@ export class ServiziRepository {
     return data;
   }
 
-  static async updateImmagine(id: number, immagineUrl: string) {
+  static async updateImmagine(id: number, immagineUrl: string | null) {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('servizi')

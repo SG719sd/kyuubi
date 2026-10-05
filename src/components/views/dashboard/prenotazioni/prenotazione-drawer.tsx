@@ -18,8 +18,12 @@ import {
   Undo2,
   Lock,
   Wrench,
+  UtensilsCrossed,
+  ShoppingBag,
+  Minus,
   Check,
 } from 'lucide-react';
+
 import {
   upsertPrenotazioneAction,
   deletePrenotazioneAction,
@@ -72,10 +76,19 @@ export default function PrenotazioneDrawer({
   professionistiServizi = [],
   clienti,
   servizi,
+  prodotti = [],
+  piatti = [],
+  initialItemType,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Active Catalog Tab for adding items: 'servizio' | 'piatto' | 'prodotto'
+  const [catalogTab, setCatalogTab] = useState<'servizio' | 'piatto' | 'prodotto'>(
+    initialItemType || (servizi.length > 0 ? 'servizio' : piatti.length > 0 ? 'piatto' : 'prodotto')
+  );
+
 
   // Form states
   const [selectedClienteId, setSelectedClienteId] = useState<number | null>(null);
@@ -151,12 +164,20 @@ export default function PrenotazioneDrawer({
         setTimeStr('09:00');
       }
 
-      // Map items (retrocompatibilità: conserva anche se originariamente erano altri tipi)
+      // Map items (retrocompatibilità e supporto comande/carrelli)
       if (initialData.items && initialData.items.length > 0) {
         const mappedItems: ItemLine[] = initialData.items.map((it) => {
-          let itemTitle = `Servizio #${it.id_item}`;
-          const f = servizi.find((s) => s.id === it.id_item);
-          if (f) itemTitle = f.titolo;
+          let itemTitle = `Item #${it.id_item}`;
+          if (it.tipo === 'piatto') {
+            const f = piatti?.find((p) => p.id === it.id_item);
+            if (f) itemTitle = f.titolo;
+          } else if (it.tipo === 'prodotto') {
+            const f = prodotti?.find((pr) => pr.id === it.id_item);
+            if (f) itemTitle = f.titolo;
+          } else {
+            const f = servizi.find((s) => s.id === it.id_item);
+            if (f) itemTitle = f.titolo;
+          }
 
           return {
             id_item: it.id_item,
@@ -164,7 +185,7 @@ export default function PrenotazioneDrawer({
             titolo: itemTitle,
             quantita: it.quantita || 1,
             prezzo: it.prezzo || 0,
-            tempo_minuti: it.tempo_minuti || 30,
+            tempo_minuti: it.tempo_minuti || 0,
             note: it.note || '',
           };
         });
@@ -193,46 +214,55 @@ export default function PrenotazioneDrawer({
     setErrorMsg(null);
     setAvailableSlots([]);
     setSlotMessage(null);
-  }, [initialData, isOpen, initialDate, initialTime, initialStaffId, professionisti, servizi]);
+  }, [initialData, isOpen, initialDate, initialTime, initialStaffId, professionisti, servizi, piatti, prodotti]);
 
-  // Filtro Servizi dedicati per l'operatore selezionato
+  // Filtro Servizi dedicati per l'operatore selezionato (Risoluzione Bug 2)
   const availableServizi = useMemo(() => {
+    // Mappa O(1) delle personalizzazioni per l'operatore selezionato
+    const customMap = new Map<number, any>();
     if (selectedStaffId && professionistiServizi && professionistiServizi.length > 0) {
-      const staffAssocs = professionistiServizi.filter(
-        (ps) => Number(ps.id_professionista) === Number(selectedStaffId) && ps.is_active !== false
-      );
-
-      if (staffAssocs.length > 0) {
-        return staffAssocs.map((assoc) => {
-          const baseServizio = servizi.find((s) => s.id === assoc.id_servizio);
-          const customPrezzo =
-            assoc.prezzo_personalizzato !== null && assoc.prezzo_personalizzato !== undefined
-              ? Number(assoc.prezzo_personalizzato)
-              : Number(baseServizio?.prezzo || 0);
-          const customTempo =
-            assoc.tempo_minuti_personalizzato !== null &&
-            assoc.tempo_minuti_personalizzato !== undefined
-              ? Number(assoc.tempo_minuti_personalizzato)
-              : Number(baseServizio?.tempo_minuti || 30);
-
-          return {
-            id: assoc.id_servizio,
-            titolo: baseServizio?.titolo || `Servizio #${assoc.id_servizio}`,
-            prezzo: customPrezzo,
-            tempo_minuti: customTempo,
-            isCustomized:
-              assoc.prezzo_personalizzato !== null || assoc.tempo_minuti_personalizzato !== null,
-          };
-        });
-      }
+      professionistiServizi.forEach((ps) => {
+        if (Number(ps.id_professionista) === Number(selectedStaffId)) {
+          customMap.set(Number(ps.id_servizio), ps);
+        }
+      });
     }
 
-    // Fallback: tutti i servizi dell'Hub
-    return servizi.map((s) => ({
-      ...s,
-      isCustomized: false,
-    }));
+    // Tutti i servizi attivi dell'Hub sono disponibili per l'operatore,
+    // escludendo ESCLUSIVAMENTE quelli specificamente disabilitati (is_active === false)
+    return servizi
+      .filter((s) => {
+        if (s.is_active === false) return false;
+        const custom = customMap.get(Number(s.id));
+        if (custom && custom.is_active === false) return false;
+        return true;
+      })
+      .map((s) => {
+        const custom = customMap.get(Number(s.id));
+        const customPrezzo =
+          custom?.prezzo_personalizzato !== null && custom?.prezzo_personalizzato !== undefined
+            ? Number(custom.prezzo_personalizzato)
+            : Number(s.prezzo || 0);
+        const customTempo =
+          custom?.tempo_minuti_personalizzato !== null &&
+          custom?.tempo_minuti_personalizzato !== undefined
+            ? Number(custom.tempo_minuti_personalizzato)
+            : Number(s.tempo_minuti || 30);
+
+        return {
+          id: s.id,
+          titolo: s.titolo,
+          categoria: s.categoria,
+          prezzo: customPrezzo,
+          tempo_minuti: customTempo,
+          immagine: s.immagine,
+          isCustomized:
+            (custom?.prezzo_personalizzato !== null && custom?.prezzo_personalizzato !== undefined) ||
+            (custom?.tempo_minuti_personalizzato !== null && custom?.tempo_minuti_personalizzato !== undefined),
+        };
+      });
   }, [selectedStaffId, professionistiServizi, servizi]);
+
 
   // Cliente attualmente collegato
   const currentClient = useMemo(() => {
@@ -365,6 +395,22 @@ export default function PrenotazioneDrawer({
     return availableServizi.filter((s) => s.titolo.toLowerCase().includes(q));
   }, [availableServizi, serviceSearchQuery]);
 
+  // Piatti filtrati per ricerca (Comande)
+  const filteredPiatti = useMemo(() => {
+    const q = serviceSearchQuery.trim().toLowerCase();
+    const available = (piatti || []).filter((p) => p.is_active !== false && p.is_disponibile !== false);
+    if (!q) return available;
+    return available.filter((p) => p.titolo?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q));
+  }, [piatti, serviceSearchQuery]);
+
+  // Prodotti filtrati per ricerca (Carrelli)
+  const filteredProdotti = useMemo(() => {
+    const q = serviceSearchQuery.trim().toLowerCase();
+    const available = (prodotti || []).filter((p) => p.is_active !== false);
+    if (!q) return available;
+    return available.filter((p) => p.titolo?.toLowerCase().includes(q) || p.brand?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q));
+  }, [prodotti, serviceSearchQuery]);
+
   // Aggiungi servizio agli items
   const handleAddService = (servizio: any) => {
     setItems((prev) => [
@@ -381,6 +427,39 @@ export default function PrenotazioneDrawer({
     ]);
   };
 
+  // Aggiungi piatto (Comanda)
+  const handleAddPiatto = (piatto: any) => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id_item: piatto.id,
+        tipo: 'piatto',
+        titolo: piatto.titolo,
+        quantita: 1,
+        prezzo: Number(piatto.prezzo) || 0,
+        tempo_minuti: 0,
+        note: '',
+      },
+    ]);
+  };
+
+  // Aggiungi prodotto (Carrello)
+  const handleAddProdotto = (prodotto: any) => {
+    const pr = Number(prodotto.prezzo_nuovo || prodotto.prezzo_listino || 0);
+    setItems((prev) => [
+      ...prev,
+      {
+        id_item: prodotto.id,
+        tipo: 'prodotto',
+        titolo: prodotto.titolo,
+        quantita: 1,
+        prezzo: pr,
+        tempo_minuti: 0,
+        note: '',
+      },
+    ]);
+  };
+
   const handleRemoveItem = (index: number) => {
     setItems((prev) => prev.filter((_, idx) => idx !== index));
   };
@@ -392,10 +471,27 @@ export default function PrenotazioneDrawer({
     );
   };
 
+  const handleUpdateItemQuantity = (index: number, delta: number) => {
+    setItems((prev) =>
+      prev.map((it, idx) => {
+        if (idx !== index) return it;
+        const nextQty = Math.max(1, (it.quantita || 1) + delta);
+        return { ...it, quantita: nextQty };
+      })
+    );
+  };
+
+
   // Durata totale in minuti
   const totalMinutes = useMemo(() => {
-    return items.reduce((acc, it) => acc + (it.tempo_minuti || 0) * it.quantita, 0);
+    return items.reduce((acc, it) => acc + (it.tempo_minuti || 0) * (it.quantita || 1), 0);
   }, [items]);
+
+  // Totale complessivo prezzo
+  const totalPrice = useMemo(() => {
+    return items.reduce((acc, it) => acc + (it.prezzo || 0) * (it.quantita || 1), 0);
+  }, [items]);
+
 
   // Orario di fine calcolato
   const calculatedEndTime = useMemo(() => {
@@ -487,7 +583,7 @@ export default function PrenotazioneDrawer({
     }
 
     if (items.length === 0) {
-      setErrorMsg('Seleziona almeno un servizio per procedere.');
+      setErrorMsg('Seleziona almeno un elemento (servizio, comanda piatto o prodotto) per procedere.');
       return;
     }
 
@@ -528,18 +624,19 @@ export default function PrenotazioneDrawer({
       note: note.trim() || null,
       stato,
       agenda: true,
-      ordini: false,
+      ordini: items.some((it) => it.tipo === 'piatto' || it.tipo === 'prodotto'),
       tms_inizio: startISO,
       items: items.map((it) => ({
         id_item: it.id_item,
-        tipo: 'servizio' as const,
+        tipo: it.tipo || 'servizio',
         quantita: it.quantita || 1,
         prezzo: it.prezzo || 0,
-        tempo_minuti: it.tempo_minuti || 30,
+        tempo_minuti: it.tempo_minuti || 0,
         note: it.note || null,
         pagamento: false,
         nuovo: true,
       })),
+
     };
 
     startTransition(async () => {
@@ -1085,25 +1182,93 @@ export default function PrenotazioneDrawer({
                 )}
               </div>
 
-              {/* 4. SERVIZI INCLUSI NELLA PRENOTAZIONE */}
+              {/* 4. ELEMENTI INCLUSI (SERVIZI, COMMANDE E CARRELLI) */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                     <Wrench className="w-3.5 h-3.5 text-indigo-500" />
-                    Servizi Selezionati ({items.length})
+                    Elementi Selezionati ({items.length})
                   </h3>
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    Durata totale: {totalMinutes}m
-                  </span>
+                  <div className="flex items-center gap-3 text-xs font-bold">
+                    {totalMinutes > 0 && (
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Durata: {totalMinutes}m
+                      </span>
+                    )}
+                    <span className="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                      Totale: € {totalPrice.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Ricerca e Aggiunta Rapida Servizi */}
+                {/* Selettore Modulo Cataloghi (Servizi, Piatti/Comande, Prodotti/Carrello) */}
+                <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatalogTab('servizio');
+                      setServiceSearchQuery('');
+                    }}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      catalogTab === 'servizio'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Wrench className="w-3 h-3" />
+                    <span>Servizi ({availableServizi.length})</span>
+                  </button>
+
+                  {piatti && piatti.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatalogTab('piatto');
+                        setServiceSearchQuery('');
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        catalogTab === 'piatto'
+                          ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <UtensilsCrossed className="w-3 h-3" />
+                      <span>Comande Piatti ({piatti.length})</span>
+                    </button>
+                  )}
+
+                  {prodotti && prodotti.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatalogTab('prodotto');
+                        setServiceSearchQuery('');
+                      }}
+                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        catalogTab === 'prodotto'
+                          ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <ShoppingBag className="w-3 h-3" />
+                      <span>Carrello Prodotti ({prodotti.length})</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Ricerca e Aggiunta Rapida Elementi */}
                 <div className="bg-slate-50 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2.5 max-w-full overflow-hidden">
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder="Cerca servizio da aggiungere..."
+                      placeholder={
+                        catalogTab === 'servizio'
+                          ? 'Cerca servizio da aggiungere...'
+                          : catalogTab === 'piatto'
+                          ? 'Cerca piatto per la comanda...'
+                          : 'Cerca prodotto per il carrello...'
+                      }
                       value={serviceSearchQuery}
                       onChange={(e) => setServiceSearchQuery(e.target.value)}
                       className="w-full pl-8 pr-7 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20"
@@ -1119,75 +1284,202 @@ export default function PrenotazioneDrawer({
                     )}
                   </div>
 
-                  {/* Risultati Servizi da toccare */}
-                  {filteredServizi.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
-                      {filteredServizi.slice(0, 10).map((servizio) => (
-                        <button
-                          key={servizio.id}
-                          type="button"
-                          onClick={() => handleAddService(servizio)}
-                          className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl text-left transition-all group flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate block group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                              {servizio.titolo}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block">
-                              {servizio.tempo_minuti} min
-                            </span>
-                          </div>
-                          <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
-                            <Plus className="w-3.5 h-3.5" />
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                      Nessun servizio trovato con &quot;{serviceSearchQuery}&quot;
-                    </div>
+                  {/* Risultati Tab 1: Servizi */}
+                  {catalogTab === 'servizio' && (
+                    filteredServizi.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
+                        {filteredServizi.slice(0, 10).map((servizio) => (
+                          <button
+                            key={servizio.id}
+                            type="button"
+                            onClick={() => handleAddService(servizio)}
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl text-left transition-all group flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate block group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                {servizio.titolo}
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                <span>{servizio.tempo_minuti} min</span>
+                                <span>•</span>
+                                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                  € {Number(servizio.prezzo).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                              <Plus className="w-3.5 h-3.5" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                        Nessun servizio trovato con &quot;{serviceSearchQuery}&quot;
+                      </div>
+                    )
+                  )}
+
+                  {/* Risultati Tab 2: Comande Piatti */}
+                  {catalogTab === 'piatto' && (
+                    filteredPiatti.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
+                        {filteredPiatti.slice(0, 10).map((piatto) => (
+                          <button
+                            key={piatto.id}
+                            type="button"
+                            onClick={() => handleAddPiatto(piatto)}
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-rose-50/60 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-700 rounded-xl text-left transition-all group flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate block group-hover:text-rose-600 dark:group-hover:text-rose-400">
+                                {piatto.titolo}
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                <span>{piatto.categoria || 'Piatto'}</span>
+                                <span>•</span>
+                                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                  € {Number(piatto.prezzo || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-6 h-6 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 group-hover:bg-rose-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                              <Plus className="w-3.5 h-3.5" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                        Nessun piatto trovato con &quot;{serviceSearchQuery}&quot;
+                      </div>
+                    )
+                  )}
+
+                  {/* Risultati Tab 3: Carrelli Prodotti */}
+                  {catalogTab === 'prodotto' && (
+                    filteredProdotti.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
+                        {filteredProdotti.slice(0, 10).map((prod) => (
+                          <button
+                            key={prod.id}
+                            type="button"
+                            onClick={() => handleAddProdotto(prod)}
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-amber-50/60 dark:hover:bg-amber-950/40 border border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-700 rounded-xl text-left transition-all group flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate block group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                                {prod.titolo}
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                <span>{prod.brand || prod.categoria || 'Articolo'}</span>
+                                <span>•</span>
+                                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                  € {Number(prod.prezzo_nuovo || prod.prezzo_listino || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                              <Plus className="w-3.5 h-3.5" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                        Nessun prodotto trovato con &quot;{serviceSearchQuery}&quot;
+                      </div>
+                    )
                   )}
                 </div>
 
-                {/* Lista dei Servizi Aggiunti */}
+                {/* Lista degli Elementi Aggiunti (Servizi, Comande Piatti, Carrello Prodotti) */}
                 {items.length === 0 ? (
                   <div className="p-4 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-400">
-                    Nessun servizio aggiunto. Seleziona almeno una prestazione sopra.
+                    Nessun elemento aggiunto. Scegli servizi, comande piatti o prodotti dal catalogo sopra.
                   </div>
                 ) : (
                   <div className="space-y-1.5">
                     {items.map((it, idx) => (
                       <div
-                        key={`${it.id_item}-${idx}`}
+                        key={`${it.tipo}-${it.id_item}-${idx}`}
                         className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl flex items-center justify-between gap-2 shadow-2xs"
                       >
                         <div className="min-w-0 flex-1">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                            {it.titolo}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                it.tipo === 'piatto'
+                                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50'
+                                  : it.tipo === 'prodotto'
+                                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50'
+                                  : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50'
+                              }`}
+                            >
+                              {it.tipo === 'piatto' ? 'Comanda' : it.tipo === 'prodotto' ? 'Carrello' : 'Servizio'}
+                            </span>
+                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {it.titolo}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            € {Number(it.prezzo).toFixed(2)} cad.
                           </span>
                         </div>
 
-                        {/* Modifica Durata & Rimuovi */}
+                        {/* Controlli Quantità / Durata & Rimuovi */}
                         <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-0.5">
-                            <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
-                            <input
-                              type="number"
-                              min="5"
-                              step="5"
-                              value={it.tempo_minuti}
-                              onChange={(e) => handleUpdateItemDuration(idx, parseInt(e.target.value) || 0)}
-                              className="w-8 bg-transparent text-xs font-bold text-slate-900 dark:text-white text-right focus:outline-none"
-                            />
-                            <span className="text-[10px] text-slate-400">m</span>
+                          {/* Stepper Quantità per Piatti e Prodotti */}
+                          {(it.tipo === 'piatto' || it.tipo === 'prodotto') && (
+                            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQuantity(idx, -1)}
+                                className="w-5 h-5 flex items-center justify-center rounded text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="text-xs font-bold px-1 min-w-[20px] text-center text-slate-900 dark:text-white">
+                                {it.quantita || 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQuantity(idx, 1)}
+                                className="w-5 h-5 flex items-center justify-center rounded text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Controllo Durata per Servizi */}
+                          {it.tipo === 'servizio' && (
+                            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-0.5">
+                              <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+                              <input
+                                type="number"
+                                min="5"
+                                step="5"
+                                value={it.tempo_minuti}
+                                onChange={(e) => handleUpdateItemDuration(idx, parseInt(e.target.value) || 0)}
+                                className="w-8 bg-transparent text-xs font-bold text-slate-900 dark:text-white text-right focus:outline-none"
+                              />
+                              <span className="text-[10px] text-slate-400">m</span>
+                            </div>
+                          )}
+
+                          {/* Subtotale Item */}
+                          <div className="text-right min-w-[50px]">
+                            <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                              € {(Number(it.prezzo) * (it.quantita || 1)).toFixed(2)}
+                            </span>
                           </div>
 
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
                             className="text-slate-400 hover:text-rose-500 p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                            title="Rimuovi servizio"
+                            title="Rimuovi"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1197,6 +1489,7 @@ export default function PrenotazioneDrawer({
                   </div>
                 )}
               </div>
+
 
               {/* 5. NOTE AGGIUNTIVE */}
               <div className="space-y-1">

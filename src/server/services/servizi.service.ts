@@ -28,20 +28,22 @@ export class ServiziService {
     return await ServiziRepository.update(id, cleanedInput);
   }
 
-  static async updateImmagineServizio(id: number, url: string) {
-    // Se c'è già una vecchia immagine diversa, la puliamo
+  static async updateImmagineServizio(id: number, url: string | null) {
+    const formattedUrl = url && url.trim() ? url.trim() : null;
     const existing = await ServiziRepository.getById(id);
-    if (existing?.immagine && existing.immagine !== url) {
-      await StorageService.deleteFile(existing.immagine);
+    const updated = await ServiziRepository.updateImmagine(id, formattedUrl);
+    if (existing?.immagine && existing.immagine !== formattedUrl) {
+      StorageService.cleanupOldMedia(existing.immagine, formattedUrl);
     }
-    return await ServiziRepository.updateImmagine(id, url);
+    return updated;
   }
 
   static async deleteServizio(id: number) {
     const existing = await ServiziRepository.getById(id);
     if (existing?.immagine) {
-      await StorageService.deleteFile(existing.immagine);
+      StorageService.cleanupOldMedia(existing.immagine);
     }
     return await ServiziRepository.softDelete(id);
   }
+
 }

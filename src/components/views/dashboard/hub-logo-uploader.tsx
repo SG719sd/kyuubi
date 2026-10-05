@@ -4,10 +4,12 @@ import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { compressAndConvertToWebP } from '@/lib/image-optimizer';
 import { getHubStoragePath } from '@/types/storage-paths';
-import { Store, Camera, Trash2, Loader2 } from 'lucide-react';
+import { Camera, Trash2, Loader2 } from 'lucide-react';
 
 import { updateHubLogoAction } from '@/server/actions/hub-info.actions';
-import { uploadMediaAction, deleteMediaAction } from '@/server/actions/storage.actions';
+import { uploadMediaAction } from '@/server/actions/storage.actions';
+
+import { ImageFallback } from '@/components/ui/image-fallback';
 
 interface HubLogoUploaderProps {
   hubId: string;
@@ -32,9 +34,6 @@ export function HubLogoUploader({
   const [loading, setLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Genera il path coerente: {hubId}/logo/logo.webp
-  const storageFilePath = getHubStoragePath.logo(hubId, 'logo.webp');
-
   // 1 & 2. CARICA, COMPRIMI E CONVERTI IN WEBP VIA SERVER ACTION
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -53,9 +52,13 @@ export function HubLogoUploader({
       // Compressione e conversione in WebP (max 800x800, qualità 82%)
       const compressedWebpBlob = await compressAndConvertToWebP(file, 800, 800, 0.82);
 
+      // Genera un nome univoco timestamped per evitare collisioni di cache e cancellazioni accidentali
+      const fileName = `logo_${Date.now()}.webp`;
+      const storageFilePath = getHubStoragePath.logo(hubId, fileName);
+
       // Caricamento sicuro via Server Action
       const formData = new FormData();
-      formData.append('file', compressedWebpBlob, 'logo.webp');
+      formData.append('file', compressedWebpBlob, fileName);
       formData.append('storagePath', storageFilePath);
 
       const uploadRes = await uploadMediaAction(formData);
@@ -65,7 +68,7 @@ export function HubLogoUploader({
 
       const displayUrl = uploadRes.url;
 
-      // Aggiorna DB tramite Server Action
+      // Aggiorna DB tramite Server Action (che effettuerà anche il cleanup asincrono della vecchia immagine)
       const updateRes = await updateHubLogoAction(slugHub, displayUrl);
       if (!updateRes.success) {
         throw new Error(updateRes.error || 'Errore salvataggio logo');
@@ -92,17 +95,14 @@ export function HubLogoUploader({
     e.stopPropagation();
 
     if (!isAdmin) {
-      alert('Non hai i permessi necessari per rimuovere il logo.');
+      setUploadError('Non hai i permessi necessari per rimuovere il logo.');
       return;
     }
 
-    if (!confirm('Sei sicuro di voler rimuovere il logo?')) return;
-
     setLoading(true);
+    setUploadError(null);
 
     try {
-      await deleteMediaAction(storageFilePath);
-
       const updateRes = await updateHubLogoAction(slugHub, null);
       if (!updateRes.success) {
         throw new Error(updateRes.error || 'Errore rimozione logo');
@@ -113,7 +113,7 @@ export function HubLogoUploader({
     } catch (err: unknown) {
       console.error('Errore durante la rimozione del logo:', err);
       const errorMessage = err instanceof Error ? err.message : 'Errore sconosciuto';
-      alert(`Impossibile rimuovere il logo: ${errorMessage}`);
+      setUploadError(`Impossibile rimuovere il logo: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -133,15 +133,16 @@ export function HubLogoUploader({
       <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white flex items-center justify-center overflow-hidden border border-slate-200/20 shadow-lg shadow-sky-500/20 relative">
         {loading ? (
           <Loader2 className="w-6 h-6 animate-spin text-white" />
-        ) : logoUrl ? (
-          <img
+        ) : (
+          <ImageFallback
             src={logoUrl}
             alt="Logo Hub"
+            fallbackType="store"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            containerClassName="w-full h-full flex items-center justify-center"
           />
-        ) : (
-          <Store className="w-8 h-8 group-hover:scale-105 transition-transform" />
         )}
+
 
         {isAdmin && !loading && (
           <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">

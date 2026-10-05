@@ -15,6 +15,9 @@ import {
   List,
   CalendarRange,
   Lock,
+  UtensilsCrossed,
+  Package,
+  Wrench,
 } from 'lucide-react';
 import PrenotazioneDrawer from './prenotazione-drawer';
 import AgendaClassica from './agenda-classica';
@@ -58,6 +61,7 @@ export default function PrenotazioniView({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('tutti');
   const [staffFilter, setStaffFilter] = useState<string>('tutti');
+  const [typeFilter, setTypeFilter] = useState<'tutti' | 'servizi' | 'comande' | 'carrelli'>('tutti');
   const [dateQuickFilter, setDateQuickFilter] = useState<'tutte' | 'oggi' | 'prossimi' | 'passati'>('tutte');
   const [viewMode, setViewMode] = useState<'agenda' | 'elenco' | 'timeline'>('agenda');
 
@@ -159,9 +163,20 @@ export default function PrenotazioniView({
         if (dateQuickFilter === 'passati' && pDateStr >= todayStr) return false;
       }
 
+      // 5. Item Type Filter (Servizi, Comande Piatti, Carrelli Prodotti)
+      if (typeFilter !== 'tutti') {
+        const hasServices = p.items?.some((i) => i.tipo === 'servizio' || !i.tipo) || (!p.ordini && (!p.items || p.items.length === 0));
+        const hasDishes = p.items?.some((i) => i.tipo === 'piatto');
+        const hasProducts = p.items?.some((i) => i.tipo === 'prodotto');
+
+        if (typeFilter === 'servizi' && !hasServices) return false;
+        if (typeFilter === 'comande' && !hasDishes) return false;
+        if (typeFilter === 'carrelli' && !hasProducts) return false;
+      }
+
       return true;
     });
-  }, [prenotazioniList, search, statusFilter, staffFilter, dateQuickFilter]);
+  }, [prenotazioniList, search, statusFilter, staffFilter, dateQuickFilter, typeFilter]);
 
   // Group by date for timeline
   const groupedByDate = useMemo(() => {
@@ -272,6 +287,8 @@ export default function PrenotazioniView({
           professionisti={professionisti}
           clienti={clienti}
           servizi={servizi}
+          prodotti={prodotti}
+          piatti={piatti}
           hubId={hubId}
           hubSlug={hubSlug}
           isAdmin={isAdmin}
@@ -315,9 +332,20 @@ export default function PrenotazioniView({
             </div>
           </div>
 
-          {/* Select Dropdowns: Stato e Professionista */}
+          {/* Select Dropdowns: Tipo modulo, Stato e Professionista */}
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value as any)}
+                className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="tutti">Tutti i moduli</option>
+                <option value="servizi">🔧 Servizi</option>
+                <option value="comande">🍽️ Comande (Piatti)</option>
+                <option value="carrelli">🛒 Carrelli (Prodotti)</option>
+              </select>
+
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -377,6 +405,11 @@ export default function PrenotazioniView({
                 ? startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : '--:--';
 
+              const serviceItems = p.items?.filter((i) => i.tipo === 'servizio' || !i.tipo) || [];
+              const dishItems = p.items?.filter((i) => i.tipo === 'piatto') || [];
+              const productItems = p.items?.filter((i) => i.tipo === 'prodotto') || [];
+              const itemsTotal = p.items?.reduce((sum, it) => sum + (Number(it.prezzo) || 0) * (it.quantita || 1), 0) || 0;
+
               return (
                 <div
                   key={p.id}
@@ -384,7 +417,13 @@ export default function PrenotazioniView({
                 >
                   <div className="flex items-start gap-3.5">
                     <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex flex-col items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                      <CalendarCheck className="w-5 h-5" />
+                      {dishItems.length > 0 && serviceItems.length === 0 ? (
+                        <UtensilsCrossed className="w-5 h-5 text-rose-500" />
+                      ) : productItems.length > 0 && serviceItems.length === 0 ? (
+                        <Package className="w-5 h-5 text-amber-500" />
+                      ) : (
+                        <CalendarCheck className="w-5 h-5" />
+                      )}
                     </div>
 
                     <div className="space-y-1">
@@ -398,6 +437,22 @@ export default function PrenotazioniView({
                           <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
                           {status.label}
                         </span>
+
+                        {dishItems.length > 0 && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+                            <UtensilsCrossed className="w-2.5 h-2.5" /> Comanda ({dishItems.length})
+                          </span>
+                        )}
+                        {productItems.length > 0 && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                            <Package className="w-2.5 h-2.5" /> Carrello ({productItems.length})
+                          </span>
+                        )}
+                        {serviceItems.length > 0 && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                            <Wrench className="w-2.5 h-2.5" /> Servizi ({serviceItems.length})
+                          </span>
+                        )}
                       </div>
 
                       {/* Informazioni Cliente & Staff */}
@@ -424,6 +479,12 @@ export default function PrenotazioniView({
                             <strong className="text-slate-700 dark:text-slate-300 font-semibold">
                               {p.professionisti.nome}
                             </strong>
+                          </span>
+                        )}
+
+                        {itemsTotal > 0 && (
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                            € {itemsTotal.toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -527,6 +588,10 @@ export default function PrenotazioniView({
                         ? sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         : '--:--';
 
+                      const serviceItems = item.items?.filter((i) => i.tipo === 'servizio' || !i.tipo) || [];
+                      const dishItems = item.items?.filter((i) => i.tipo === 'piatto') || [];
+                      const productItems = item.items?.filter((i) => i.tipo === 'prodotto') || [];
+
                       return (
                         <div
                           key={item.id}
@@ -546,10 +611,28 @@ export default function PrenotazioniView({
                             {item.titolo || 'Appuntamento'}
                           </h4>
 
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {dishItems.length > 0 && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
+                                <UtensilsCrossed className="w-2.5 h-2.5" /> Comanda ({dishItems.length})
+                              </span>
+                            )}
+                            {productItems.length > 0 && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                                <Package className="w-2.5 h-2.5" /> Carrello ({productItems.length})
+                              </span>
+                            )}
+                            {serviceItems.length > 0 && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                                <Wrench className="w-2.5 h-2.5" /> Servizi ({serviceItems.length})
+                              </span>
+                            )}
+                          </div>
+
                           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                             <span>{item.rubrica ? `${item.rubrica.nome} ${item.rubrica.cognome || ''}` : 'Anonimo'}</span>
                             <span className="font-semibold text-slate-600 dark:text-slate-300">
-                              {item.items && item.items.length > 0 ? `${item.items.length} ${item.items.length === 1 ? 'servizio' : 'servizi'}` : ''}
+                              {item.items && item.items.length > 0 ? `${item.items.length} ${item.items.length === 1 ? 'voce' : 'voci'}` : ''}
                             </span>
                           </div>
 
