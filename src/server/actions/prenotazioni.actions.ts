@@ -36,6 +36,8 @@ export async function upsertPrenotazioneAction(
     await requireHubAdmin(hubSlug || input.id_hub);
     const result = await PrenotazioniService.upsertPrenotazione(input);
     revalidatePath(`/dashboard/hubs/${hubSlug}/prenotazioni`);
+    revalidatePath(`/dashboard/hubs/${hubSlug}/comande`);
+    revalidatePath(`/dashboard/hubs/${hubSlug}/carrelli`);
     return { success: true, data: result };
   } catch (err: any) {
     return {
@@ -55,6 +57,8 @@ export async function cambioStatoPrenotazioneAction(
     await requireHubAdmin(hubSlug || hubId);
     const result = await PrenotazioniService.cambioStato(id, hubId, nuovoStato);
     revalidatePath(`/dashboard/hubs/${hubSlug}/prenotazioni`);
+    revalidatePath(`/dashboard/hubs/${hubSlug}/comande`);
+    revalidatePath(`/dashboard/hubs/${hubSlug}/carrelli`);
     return { success: true, data: result };
   } catch (err: any) {
     return {
@@ -73,6 +77,8 @@ export async function deletePrenotazioneAction(
     await requireHubAdmin(hubSlug || hubId);
     await PrenotazioniService.deletePrenotazione(id, hubId);
     revalidatePath(`/dashboard/hubs/${hubSlug}/prenotazioni`);
+    revalidatePath(`/dashboard/hubs/${hubSlug}/comande`);
+    revalidatePath(`/dashboard/hubs/${hubSlug}/carrelli`);
     return { success: true };
   } catch (err: any) {
     return {

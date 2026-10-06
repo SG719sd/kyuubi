@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useTransition, useMemo, useCallback } from 'react';
+import { useState, useEffect, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   X,
-  CalendarCheck,
+  UtensilsCrossed,
   Clock,
   User,
   Plus,
@@ -17,17 +17,16 @@ import {
   ShieldCheck,
   Undo2,
   Lock,
-  Wrench,
-  UtensilsCrossed,
-  ShoppingBag,
   Minus,
   Check,
+  ChefHat,
+  ShoppingBag,
+  Wrench,
 } from 'lucide-react';
 
 import {
   upsertPrenotazioneAction,
   deletePrenotazioneAction,
-  calcolaSlotDisponibiliAction,
 } from '@/server/actions/prenotazioni.actions';
 import { createRubricaAction } from '@/server/actions/rubrica.actions';
 import { PrenotazioneWithDetails } from '@/server/repositories/prenotazioni.repository';
@@ -42,20 +41,17 @@ interface Props {
   initialDate?: string;
   initialTime?: string;
   initialStaffId?: number | null;
-  initialSenzaOrario?: boolean;
-  initialItemType?: 'servizio' | 'prodotto' | 'piatto';
-  mode?: 'prenotazione' | 'comanda' | 'carrello';
   professionisti: any[];
   professionistiServizi?: any[];
   clienti: any[];
-  servizi: any[];
+  piatti: any[];
   prodotti?: any[];
-  piatti?: any[];
+  servizi?: any[];
 }
 
 interface ItemLine {
   id_item: number;
-  tipo: 'servizio' | 'prodotto' | 'piatto';
+  tipo: 'piatto' | 'prodotto' | 'servizio';
   titolo: string;
   quantita: number;
   prezzo: number;
@@ -63,7 +59,7 @@ interface ItemLine {
   note?: string;
 }
 
-export default function PrenotazioneDrawer({
+export default function ComandaDrawer({
   isOpen,
   onClose,
   hubId,
@@ -74,28 +70,17 @@ export default function PrenotazioneDrawer({
   initialTime,
   initialStaffId,
   professionisti,
-  professionistiServizi = [],
   clienti,
-  servizi,
-  prodotti = [],
   piatti = [],
-  initialItemType,
-  mode = 'prenotazione',
+  prodotti = [],
+  servizi = [],
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const getComputedDefaultTab = useCallback(() => {
-    if (initialItemType) return initialItemType;
-    if (mode === 'comanda') return 'piatto';
-    if (mode === 'carrello') return 'prodotto';
-    return servizi.length > 0 ? 'servizio' : piatti.length > 0 ? 'piatto' : 'prodotto';
-  }, [initialItemType, mode, servizi, piatti]);
-
-  // Active Catalog Tab for adding items: 'servizio' | 'piatto' | 'prodotto'
-  const [catalogTab, setCatalogTab] = useState<'servizio' | 'piatto' | 'prodotto'>(getComputedDefaultTab());
-
+  // Active Catalog Tab for adding items: 'piatto' | 'prodotto' | 'servizio'
+  const [catalogTab, setCatalogTab] = useState<'piatto' | 'prodotto' | 'servizio'>('piatto');
 
   // Form states
   const [selectedClienteId, setSelectedClienteId] = useState<number | null>(null);
@@ -104,7 +89,7 @@ export default function PrenotazioneDrawer({
   const [note, setNote] = useState('');
   const [stato, setStato] = useState<'pending' | 'confermata' | 'completata' | 'cancellata'>('pending');
 
-  // Clienti list locale sincronizzata con aggiunte al volo
+  // Clienti list locale sincronizzata
   const [clientiList, setClientiList] = useState<any[]>(clienti);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [isClientSearchOpen, setIsClientSearchOpen] = useState(false);
@@ -123,18 +108,13 @@ export default function PrenotazioneDrawer({
 
   // Date and Time
   const [dateStr, setDateStr] = useState('');
-  const [timeStr, setTimeStr] = useState('09:00');
+  const [timeStr, setTimeStr] = useState('12:30');
 
-  // Selected items list (SOLO SERVIZI)
+  // Selected items list
   const [items, setItems] = useState<ItemLine[]>([]);
 
-  // Service search query
-  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
-
-  // Available slots preview
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
-  const [slotMessage, setSlotMessage] = useState<string | null>(null);
+  // Search query in catalogue
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
 
   // Sincronizza clientiList se cambiano le props
   useEffect(() => {
@@ -147,7 +127,7 @@ export default function PrenotazioneDrawer({
     setIsClientSearchOpen(false);
     setShowQuickAddClient(false);
     setQuickError(null);
-    setServiceSearchQuery('');
+    setItemSearchQuery('');
     setRemovedClient(null);
 
     if (initialData) {
@@ -168,13 +148,13 @@ export default function PrenotazioneDrawer({
         setTimeStr(`${hours}:${minutes}`);
       } else {
         setDateStr(new Date().toISOString().slice(0, 10));
-        setTimeStr('09:00');
+        setTimeStr('12:30');
       }
 
-      // Map items (retrocompatibilità e supporto comande/carrelli)
+      // Map items
       if (initialData.items && initialData.items.length > 0) {
         const mappedItems: ItemLine[] = initialData.items.map((it) => {
-          let itemTitle = `Item #${it.id_item}`;
+          let itemTitle = `Voce #${it.id_item}`;
           if (it.tipo === 'piatto') {
             const f = piatti?.find((p) => p.id === it.id_item);
             if (f) itemTitle = f.titolo;
@@ -182,17 +162,17 @@ export default function PrenotazioneDrawer({
             const f = prodotti?.find((pr) => pr.id === it.id_item);
             if (f) itemTitle = f.titolo;
           } else {
-            const f = servizi.find((s) => s.id === it.id_item);
+            const f = servizi?.find((s) => s.id === it.id_item);
             if (f) itemTitle = f.titolo;
           }
 
           return {
             id_item: it.id_item,
-            tipo: (it.tipo as any) || 'servizio',
+            tipo: (it.tipo as any) || 'piatto',
             titolo: itemTitle,
             quantita: it.quantita || 1,
             prezzo: it.prezzo || 0,
-            tempo_minuti: it.tempo_minuti || 0,
+            tempo_minuti: it.tempo_minuti || 15,
             note: it.note || '',
           };
         });
@@ -201,7 +181,7 @@ export default function PrenotazioneDrawer({
         setItems([]);
       }
     } else {
-      // Create new
+      // Create new comanda
       setSelectedClienteId(null);
       setSelectedStaffId(
         initialStaffId !== undefined
@@ -214,68 +194,13 @@ export default function PrenotazioneDrawer({
       setNote('');
       setStato('pending');
       setDateStr(initialDate || new Date().toISOString().slice(0, 10));
-      setTimeStr(initialTime || '09:00');
+      setTimeStr(initialTime || '12:30');
       setItems([]);
-      setCatalogTab(getComputedDefaultTab());
-    }
-
-    if (initialData?.items && initialData.items.length > 0) {
-      const firstType = initialData.items[0].tipo as 'servizio' | 'piatto' | 'prodotto';
-      if (firstType) setCatalogTab(firstType);
+      setCatalogTab('piatto');
     }
 
     setErrorMsg(null);
-    setAvailableSlots([]);
-    setSlotMessage(null);
-  }, [initialData, isOpen, initialDate, initialTime, initialStaffId, professionisti, servizi, piatti, prodotti, mode, getComputedDefaultTab]);
-
-  // Filtro Servizi dedicati per l'operatore selezionato (Risoluzione Bug 2)
-  const availableServizi = useMemo(() => {
-    // Mappa O(1) delle personalizzazioni per l'operatore selezionato
-    const customMap = new Map<number, any>();
-    if (selectedStaffId && professionistiServizi && professionistiServizi.length > 0) {
-      professionistiServizi.forEach((ps) => {
-        if (Number(ps.id_professionista) === Number(selectedStaffId)) {
-          customMap.set(Number(ps.id_servizio), ps);
-        }
-      });
-    }
-
-    // Tutti i servizi attivi dell'Hub sono disponibili per l'operatore,
-    // escludendo ESCLUSIVAMENTE quelli specificamente disabilitati (is_active === false)
-    return servizi
-      .filter((s) => {
-        if (s.is_active === false) return false;
-        const custom = customMap.get(Number(s.id));
-        if (custom && custom.is_active === false) return false;
-        return true;
-      })
-      .map((s) => {
-        const custom = customMap.get(Number(s.id));
-        const customPrezzo =
-          custom?.prezzo_personalizzato !== null && custom?.prezzo_personalizzato !== undefined
-            ? Number(custom.prezzo_personalizzato)
-            : Number(s.prezzo || 0);
-        const customTempo =
-          custom?.tempo_minuti_personalizzato !== null &&
-          custom?.tempo_minuti_personalizzato !== undefined
-            ? Number(custom.tempo_minuti_personalizzato)
-            : Number(s.tempo_minuti || 30);
-
-        return {
-          id: s.id,
-          titolo: s.titolo,
-          categoria: s.categoria,
-          prezzo: customPrezzo,
-          tempo_minuti: customTempo,
-          immagine: s.immagine,
-          isCustomized:
-            (custom?.prezzo_personalizzato !== null && custom?.prezzo_personalizzato !== undefined) ||
-            (custom?.tempo_minuti_personalizzato !== null && custom?.tempo_minuti_personalizzato !== undefined),
-        };
-      });
-  }, [selectedStaffId, professionistiServizi, servizi]);
-
+  }, [initialData, isOpen, initialDate, initialTime, initialStaffId, professionisti, piatti, prodotti, servizi]);
 
   // Cliente attualmente collegato
   const currentClient = useMemo(() => {
@@ -313,8 +238,8 @@ export default function PrenotazioneDrawer({
     setRemovedClient(null);
     setIsClientSearchOpen(false);
     setClientSearchQuery('');
-    if (!titolo.trim() || titolo.trim() === 'Prenotazione') {
-      setTitolo(`${clientToRestore.nome} ${clientToRestore.cognome || ''}`.trim());
+    if (!titolo.trim()) {
+      setTitolo(`Tavolo ${clientToRestore.nome}`);
     }
   };
 
@@ -351,7 +276,7 @@ export default function PrenotazioneDrawer({
       setQuickTelefono('');
     }
     setQuickEmail('');
-    setQuickNote('Inserito da prenotazione');
+    setQuickNote('Cliente comanda cucina');
   };
 
   // Salva cliente in Rubrica ed associalo istantaneamente
@@ -384,8 +309,8 @@ export default function PrenotazioneDrawer({
         setClientiList((prev) => [newClient, ...prev]);
         setSelectedClienteId(newClient.id);
         setRemovedClient(null);
-        if (!titolo.trim() || titolo.trim() === 'Prenotazione') {
-          setTitolo(`${newClient.nome} ${newClient.cognome || ''}`.trim());
+        if (!titolo.trim()) {
+          setTitolo(`Tavolo ${newClient.nome}`);
         }
         setShowQuickAddClient(false);
         setIsClientSearchOpen(false);
@@ -401,30 +326,64 @@ export default function PrenotazioneDrawer({
     }
   };
 
-  // Servizi filtrati per ricerca
-  const filteredServizi = useMemo(() => {
-    const q = serviceSearchQuery.trim().toLowerCase();
-    if (!q) return availableServizi;
-    return availableServizi.filter((s) => s.titolo.toLowerCase().includes(q));
-  }, [availableServizi, serviceSearchQuery]);
-
-  // Piatti filtrati per ricerca (Comande)
+  // Piatti filtrati per ricerca
   const filteredPiatti = useMemo(() => {
-    const q = serviceSearchQuery.trim().toLowerCase();
+    const q = itemSearchQuery.trim().toLowerCase();
     const available = (piatti || []).filter((p) => p.is_active !== false && p.is_disponibile !== false);
     if (!q) return available;
     return available.filter((p) => p.titolo?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q));
-  }, [piatti, serviceSearchQuery]);
+  }, [piatti, itemSearchQuery]);
 
-  // Prodotti filtrati per ricerca (Carrelli)
+  // Prodotti filtrati per ricerca
   const filteredProdotti = useMemo(() => {
-    const q = serviceSearchQuery.trim().toLowerCase();
+    const q = itemSearchQuery.trim().toLowerCase();
     const available = (prodotti || []).filter((p) => p.is_active !== false);
     if (!q) return available;
-    return available.filter((p) => p.titolo?.toLowerCase().includes(q) || p.brand?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q));
-  }, [prodotti, serviceSearchQuery]);
+    return available.filter((p) => p.titolo?.toLowerCase().includes(q) || p.categoria?.toLowerCase().includes(q));
+  }, [prodotti, itemSearchQuery]);
 
-  // Aggiungi servizio agli items
+  // Servizi filtrati per ricerca
+  const filteredServizi = useMemo(() => {
+    const q = itemSearchQuery.trim().toLowerCase();
+    const available = (servizi || []).filter((s) => s.is_active !== false);
+    if (!q) return available;
+    return available.filter((s) => s.titolo?.toLowerCase().includes(q) || s.categoria?.toLowerCase().includes(q));
+  }, [servizi, itemSearchQuery]);
+
+  // Aggiungi piatto (Comanda)
+  const handleAddPiatto = (piatto: any) => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id_item: piatto.id,
+        tipo: 'piatto',
+        titolo: piatto.titolo,
+        quantita: 1,
+        prezzo: Number(piatto.prezzo) || 0,
+        tempo_minuti: 15,
+        note: '',
+      },
+    ]);
+  };
+
+  // Aggiungi prodotto
+  const handleAddProdotto = (prodotto: any) => {
+    const pr = Number(prodotto.prezzo_nuovo || prodotto.prezzo_listino || 0);
+    setItems((prev) => [
+      ...prev,
+      {
+        id_item: prodotto.id,
+        tipo: 'prodotto',
+        titolo: prodotto.titolo,
+        quantita: 1,
+        prezzo: pr,
+        tempo_minuti: 5,
+        note: '',
+      },
+    ]);
+  };
+
+  // Aggiungi servizio
   const handleAddService = (servizio: any) => {
     setItems((prev) => [
       ...prev,
@@ -440,45 +399,12 @@ export default function PrenotazioneDrawer({
     ]);
   };
 
-  // Aggiungi piatto (Comanda)
-  const handleAddPiatto = (piatto: any) => {
-    setItems((prev) => [
-      ...prev,
-      {
-        id_item: piatto.id,
-        tipo: 'piatto',
-        titolo: piatto.titolo,
-        quantita: 1,
-        prezzo: Number(piatto.prezzo) || 0,
-        tempo_minuti: 15, // Tempo medio preparazione cucina stimato
-        note: '',
-      },
-    ]);
-  };
-
-  // Aggiungi prodotto (Carrello)
-  const handleAddProdotto = (prodotto: any) => {
-    const pr = Number(prodotto.prezzo_nuovo || prodotto.prezzo_listino || 0);
-    setItems((prev) => [
-      ...prev,
-      {
-        id_item: prodotto.id,
-        tipo: 'prodotto',
-        titolo: prodotto.titolo,
-        quantita: 1,
-        prezzo: pr,
-        tempo_minuti: 5, // Tempo medio preparazione/allestimento
-        note: '',
-      },
-    ]);
-  };
-
   const handleRemoveItem = (index: number) => {
     setItems((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleUpdateItemDuration = (index: number, newMinutes: number) => {
-    const clamped = Math.max(5, newMinutes);
+    const clamped = Math.max(0, newMinutes);
     setItems((prev) =>
       prev.map((it, idx) => (idx === index ? { ...it, tempo_minuti: clamped } : it))
     );
@@ -500,8 +426,7 @@ export default function PrenotazioneDrawer({
     );
   };
 
-
-  // Durata totale in minuti
+  // Durata totale in minuti (tempo di preparazione stimato)
   const totalMinutes = useMemo(() => {
     return items.reduce((acc, it) => acc + (it.tempo_minuti || 0) * (it.quantita || 1), 0);
   }, [items]);
@@ -511,8 +436,7 @@ export default function PrenotazioneDrawer({
     return items.reduce((acc, it) => acc + (it.prezzo || 0) * (it.quantita || 1), 0);
   }, [items]);
 
-
-  // Orario di fine calcolato
+  // Orario stimato fine / uscita comanda
   const calculatedEndTime = useMemo(() => {
     if (!dateStr || !timeStr) return '';
     try {
@@ -525,89 +449,21 @@ export default function PrenotazioneDrawer({
     }
   }, [dateStr, timeStr, totalMinutes]);
 
-  // Regola durata totale con preset
-  const applyTotalDuration = (targetDuration: number) => {
-    const clamped = Math.max(5, targetDuration);
-    if (items.length === 0) return;
-
-    if (items.length === 1) {
-      setItems((prev) => [{ ...prev[0], tempo_minuti: clamped }]);
-    } else {
-      const otherDuration = items.slice(1).reduce((sum, it) => sum + (it.tempo_minuti || 0), 0);
-      const remainingForFirst = Math.max(5, clamped - otherDuration);
-      setItems((prev) => [
-        { ...prev[0], tempo_minuti: remainingForFirst },
-        ...prev.slice(1),
-      ]);
-    }
-  };
-
-  // Modifica ora fine manuale
-  const handleEndTimeChange = (newEndTime: string) => {
-    if (!newEndTime || !timeStr || !dateStr) return;
-    try {
-      const [sh, sm] = timeStr.split(':').map(Number);
-      const [eh, em] = newEndTime.split(':').map(Number);
-      const startMinutes = sh * 60 + sm;
-      const endMinutes = eh * 60 + em;
-      let diff = endMinutes - startMinutes;
-      if (diff <= 0) diff += 24 * 60;
-      applyTotalDuration(diff);
-    } catch {
-      // Ignora errori di parsing orario
-    }
-  };
-
-  // Controllo slot liberi
-  const handleCheckAvailableSlots = async () => {
-    if (!dateStr) {
-      setSlotMessage('Inserisci una data valida.');
-      return;
-    }
-
-    setSlotsLoading(true);
-    setSlotMessage(null);
-    setAvailableSlots([]);
-
-    try {
-      const res = await calcolaSlotDisponibiliAction({
-        id_hub: hubId,
-        data: dateStr,
-        id_professionista: selectedStaffId || undefined,
-        durata_minuti_override: Math.max(totalMinutes, 15),
-      });
-
-      if (res.success && res.data) {
-        const slots = (res.data.slotLiberi || []).map((s: any) => s.inizio);
-        setAvailableSlots(slots);
-        if (slots.length === 0) {
-          setSlotMessage(res.data.motivo || 'Nessuno slot disponibile per i parametri selezionati.');
-        }
-      } else {
-        setSlotMessage(res.error || 'Errore nel recupero degli slot.');
-      }
-    } catch {
-      setSlotMessage('Impossibile verificare gli slot.');
-    } finally {
-      setSlotsLoading(false);
-    }
-  };
-
-  // Invio Form
+  // Invio Form Comanda
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) {
-      setErrorMsg('Operazione non consentita: solo gli amministratori possono salvare le prenotazioni.');
+      setErrorMsg('Operazione non consentita: solo gli amministratori possono salvare le comande.');
       return;
     }
 
     if (items.length === 0) {
-      setErrorMsg('Seleziona almeno un elemento (servizio, comanda piatto o prodotto) per procedere.');
+      setErrorMsg('Seleziona almeno un piatto o prodotto per la comanda.');
       return;
     }
 
     if (!dateStr || !timeStr) {
-      setErrorMsg('Specifica data e orario dell\'appuntamento.');
+      setErrorMsg('Specifica data e orario della comanda.');
       return;
     }
 
@@ -619,11 +475,11 @@ export default function PrenotazioneDrawer({
     let generatedTitle = titolo.trim();
     if (!generatedTitle) {
       if (currentClient) {
-        generatedTitle = `${currentClient.nome} ${currentClient.cognome || ''}`.trim();
+        generatedTitle = `Comanda ${currentClient.nome} ${currentClient.cognome || ''}`.trim();
       } else if (items.length > 0) {
-        generatedTitle = `Prenotazione ${items[0].titolo}`;
+        generatedTitle = `Comanda ${items[0].titolo}`;
       } else {
-        generatedTitle = 'Prenotazione';
+        generatedTitle = 'Comanda Sala';
       }
     }
 
@@ -643,11 +499,11 @@ export default function PrenotazioneDrawer({
       note: note.trim() || null,
       stato,
       agenda: true,
-      ordini: items.some((it) => it.tipo === 'piatto' || it.tipo === 'prodotto'),
+      ordini: true,
       tms_inizio: startISO,
       items: items.map((it) => ({
         id_item: it.id_item,
-        tipo: it.tipo || 'servizio',
+        tipo: it.tipo || 'piatto',
         quantita: it.quantita || 1,
         prezzo: it.prezzo || 0,
         tempo_minuti: it.tempo_minuti || 0,
@@ -655,7 +511,6 @@ export default function PrenotazioneDrawer({
         pagamento: false,
         nuovo: true,
       })),
-
     };
 
     startTransition(async () => {
@@ -664,18 +519,18 @@ export default function PrenotazioneDrawer({
         router.refresh();
         onClose();
       } else {
-        setErrorMsg(res.error || 'Errore durante il salvataggio');
+        setErrorMsg(res.error || 'Errore durante il salvataggio della comanda');
       }
     });
   };
 
   const handleDelete = async () => {
     if (!isAdmin) {
-      setErrorMsg('Operazione non consentita: solo gli amministratori possono cancellare le prenotazioni.');
+      setErrorMsg('Operazione non consentita: solo gli amministratori possono cancellare le comande.');
       return;
     }
     if (!initialData) return;
-    if (!confirm('Sei sicuro di voler cancellare questa prenotazione?')) return;
+    if (!confirm('Sei sicuro di voler cancellare questa comanda?')) return;
 
     startTransition(async () => {
       const res = await deletePrenotazioneAction(initialData.id, hubId, hubSlug);
@@ -683,7 +538,7 @@ export default function PrenotazioneDrawer({
         router.refresh();
         onClose();
       } else {
-        setErrorMsg(res.error || 'Errore durante l\'eliminazione');
+        setErrorMsg(res.error || 'Errore durante l\'eliminazione della comanda');
       }
     });
   };
@@ -695,9 +550,9 @@ export default function PrenotazioneDrawer({
       cleanTel = `+39${cleanTel}`;
     }
     const cleanNum = cleanTel.replace('+', '');
-    const serviceName = items.length > 0 ? items[0].titolo : (titolo || 'appuntamento');
+    const dishCount = items.reduce((acc, it) => acc + (it.quantita || 1), 0);
     const msg = encodeURIComponent(
-      `Ciao ${currentClient.nome}, ti ricordiamo il tuo appuntamento per "${serviceName}" fissato per il ${dateStr} alle ore ${timeStr}.`
+      `Ciao ${currentClient.nome}, confermiamo la comanda di ${dishCount} portate per il ${dateStr} alle ore ${timeStr}.`
     );
     return `https://wa.me/${cleanNum}?text=${msg}`;
   };
@@ -705,36 +560,26 @@ export default function PrenotazioneDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs animate-fade-in overflow-hidden">
-      {/* Contenitore Drawer: strictly max-w-full and overflow-x-hidden to prevent mobile horizontal shift */}
-      <div className="w-full max-w-full sm:max-w-xl md:max-w-2xl bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800 overflow-x-hidden">
-        
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end animate-fade-in">
+      <div
+        className="fixed inset-0 cursor-pointer"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col z-10 border-l border-slate-200 dark:border-slate-800 animate-slide-left">
         {/* Header Drawer */}
-        <div className="p-3.5 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 overflow-hidden shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0 max-w-full overflow-hidden">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-              mode === 'comanda'
-                ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400'
-                : mode === 'carrello'
-                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400'
-                : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400'
-            }`}>
-              {mode === 'comanda' ? (
-                <UtensilsCrossed className="w-5 h-5" />
-              ) : mode === 'carrello' ? (
-                <ShoppingBag className="w-5 h-5" />
-              ) : (
-                <CalendarCheck className="w-5 h-5" />
-              )}
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-white dark:bg-slate-900 sticky top-0 z-20">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200/60 dark:border-rose-900/40">
+              <UtensilsCrossed className="w-5 h-5" />
             </div>
             <div className="truncate min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                 <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">
                   {currentClient
-                    ? `${currentClient.nome} ${currentClient.cognome || ''}`.trim()
-                    : (titolo.trim() || (initialData 
-                        ? (mode === 'comanda' ? `Comanda #${initialData.id}` : mode === 'carrello' ? `Carrello #${initialData.id}` : `Prenotazione #${initialData.id}`)
-                        : (mode === 'comanda' ? 'Nuova Comanda Piatti' : mode === 'carrello' ? 'Nuovo Carrello Ordine' : 'Nuova Prenotazione')))}
+                    ? `Comanda: ${currentClient.nome} ${currentClient.cognome || ''}`.trim()
+                    : (titolo.trim() || (initialData ? `Comanda #${initialData.id}` : 'Nuova Comanda Cucina'))}
                 </h2>
                 {initialData && (
                   <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">
@@ -757,13 +602,7 @@ export default function PrenotazioneDrawer({
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                 {dateStr} • Ore {timeStr}
-                {items.length > 0 ? (
-                  mode === 'comanda'
-                    ? ` • ${items.reduce((acc, it) => acc + (it.quantita || 1), 0)} portate`
-                    : mode === 'carrello'
-                    ? ` • ${items.reduce((acc, it) => acc + (it.quantita || 1), 0)} articoli`
-                    : ` • ${items.length} ${items.length === 1 ? 'voce' : 'voci'}`
-                ) : ''}
+                {items.length > 0 ? ` • ${items.reduce((acc, it) => acc + (it.quantita || 1), 0)} portate` : ''}
               </p>
             </div>
           </div>
@@ -792,21 +631,21 @@ export default function PrenotazioneDrawer({
             </div>
           )}
 
-          <form id="prenotazione-form" onSubmit={handleSubmit} className="max-w-full overflow-x-hidden">
+          <form id="comanda-form" onSubmit={handleSubmit} className="max-w-full overflow-x-hidden">
             <fieldset disabled={!isAdmin} className="space-y-4 sm:space-y-5 max-w-full overflow-x-hidden">
 
-              {/* 1. SELEZIONE CLIENTE */}
+              {/* 1. SELEZIONE CLIENTE (OPZIONALE PER COMANDE SALA) */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-indigo-500" />
-                    Cliente Assegnato
+                    <User className="w-3.5 h-3.5 text-rose-500" />
+                    Cliente / Contatto Sala o Asporto
                   </label>
                   {!showQuickAddClient && !currentClient && (
                     <button
                       type="button"
                       onClick={handleOpenQuickAdd}
-                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
                       <span>+ Nuovo in Rubrica</span>
@@ -822,7 +661,7 @@ export default function PrenotazioneDrawer({
 
                 {/* Cliente Selezionato Badge */}
                 {currentClient ? (
-                  <div className="p-3 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/60 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -834,7 +673,7 @@ export default function PrenotazioneDrawer({
                           <span>{currentClient.telefono}</span>
                           <a
                             href={`tel:${currentClient.telefono}`}
-                            className="text-indigo-600 hover:underline flex items-center gap-0.5"
+                            className="text-rose-600 hover:underline flex items-center gap-0.5"
                           >
                             <Phone className="w-3 h-3" />
                           </a>
@@ -870,7 +709,7 @@ export default function PrenotazioneDrawer({
                   </div>
                 ) : showQuickAddClient ? (
                   /* Form Rapido Aggiunta Cliente */
-                  <div className="p-3 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-2.5">
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-white">
                       <span>Nuovo Contatto in Rubrica</span>
                       <button
@@ -907,7 +746,7 @@ export default function PrenotazioneDrawer({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
                         type="tel"
-                        placeholder="Telefono"
+                        placeholder="Telefono (es. 340...)"
                         value={quickTelefono}
                         onChange={(e) => setQuickTelefono(e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
@@ -921,55 +760,53 @@ export default function PrenotazioneDrawer({
                       />
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-1">
+                    <div className="flex justify-end gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => setShowQuickAddClient(false)}
-                        className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700"
+                        className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold"
                       >
                         Annulla
                       </button>
                       <button
                         type="button"
-                        onClick={handleSaveQuickClient}
+                        onClick={() => handleSaveQuickClient()}
                         disabled={quickLoading || !quickNome.trim()}
-                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                        className="px-3 py-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold"
                       >
-                        {quickLoading ? 'Salvataggio...' : 'Crea e Collega'}
+                        {quickLoading ? 'Salvataggio...' : 'Salva in Rubrica'}
                       </button>
                     </div>
                   </div>
                 ) : (
-                  /* Campo Cerca Cliente */
+                  /* Campo di Ricerca o Selezione */
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      placeholder="Cerca cliente in rubrica (nome, telefono)..."
-                      value={clientSearchQuery}
-                      onChange={(e) => {
-                        setClientSearchQuery(e.target.value);
-                        setIsClientSearchOpen(true);
-                      }}
-                      onFocus={() => setIsClientSearchOpen(true)}
-                      className="w-full pl-8 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
-                    {clientSearchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setClientSearchQuery('');
-                          setIsClientSearchOpen(false);
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Cerca cliente in rubrica (opzionale per comande banco/sala)..."
+                        value={clientSearchQuery}
+                        onChange={(e) => {
+                          setClientSearchQuery(e.target.value);
+                          setIsClientSearchOpen(true);
                         }}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                        onFocus={() => setIsClientSearchOpen(true)}
+                        className="w-full pl-8 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                      />
+                      {clientSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setClientSearchQuery('')}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
 
-                    {/* Risultati ricerca cliente */}
                     {isClientSearchOpen && (
-                      <div className="absolute left-0 right-0 z-30 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                      <div className="absolute top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-30 p-1">
                         {filteredClienti.length > 0 ? (
                           filteredClienti.map((c) => (
                             <button
@@ -977,37 +814,31 @@ export default function PrenotazioneDrawer({
                               type="button"
                               onClick={() => {
                                 setSelectedClienteId(c.id);
-                                setRemovedClient(null);
-                                if (!titolo.trim() || titolo.trim() === 'Prenotazione') {
-                                  setTitolo(`${c.nome} ${c.cognome || ''}`.trim());
-                                }
                                 setIsClientSearchOpen(false);
                                 setClientSearchQuery('');
+                                if (!titolo.trim()) {
+                                  setTitolo(`Tavolo ${c.nome}`);
+                                }
                               }}
-                              className="w-full px-3 py-2 text-left hover:bg-indigo-50/70 dark:hover:bg-indigo-950/50 flex items-center justify-between gap-2 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800/40 last:border-0"
+                              className="w-full text-left px-2.5 py-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg flex items-center justify-between text-xs cursor-pointer transition-colors"
                             >
-                              <div className="min-w-0">
-                                <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                                  {c.nome} {c.cognome || ''}
-                                </span>
-                                {c.telefono && (
-                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                    {c.telefono}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold shrink-0">
-                                Collega
+                              <span className="font-bold text-slate-800 dark:text-white">
+                                {c.nome} {c.cognome || ''}
                               </span>
+                              {c.telefono && (
+                                <span className="text-[11px] text-slate-400 font-mono">
+                                  {c.telefono}
+                                </span>
+                              )}
                             </button>
                           ))
                         ) : (
-                          <div className="p-3 text-center text-xs text-slate-400">
+                          <div className="p-2 text-center text-xs text-slate-400">
                             Nessun cliente trovato.{' '}
                             <button
                               type="button"
                               onClick={handleOpenQuickAdd}
-                              className="text-indigo-600 font-bold hover:underline"
+                              className="text-rose-600 font-bold hover:underline"
                             >
                               Crea ora
                             </button>
@@ -1030,19 +861,34 @@ export default function PrenotazioneDrawer({
                 )}
               </div>
 
-              {/* 2. OPERATORE, STATO & TITOLO */}
+              {/* 2. RIFERIMENTO TAVOLO / ASPOSTO & OPERATORE */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <User className="w-3.5 h-3.5 text-indigo-500" />
-                    Operatore Assegnato
+                    <UtensilsCrossed className="w-3.5 h-3.5 text-rose-500" />
+                    Tavolo / Riferimento Comanda *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Es. Tavolo 4, Terrazza, Asporto 13:00..."
+                    value={titolo}
+                    onChange={(e) => setTitolo(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-rose-500/20"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-rose-500" />
+                    Cameriere / Addetto Sala
                   </label>
                   <select
                     value={selectedStaffId || ''}
                     onChange={(e) => setSelectedStaffId(e.target.value ? Number(e.target.value) : null)}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white"
                   >
-                    <option value="">-- Nessun operatore specifico --</option>
+                    <option value="">-- Sala / Non assegnato --</option>
                     {professionisti.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.nome} ({p.ruolo})
@@ -1050,71 +896,41 @@ export default function PrenotazioneDrawer({
                     ))}
                   </select>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    {mode === 'comanda' ? 'Stato Comanda' : mode === 'carrello' ? 'Stato Ordine / Carrello' : 'Stato Prenotazione'}
-                  </label>
-                  <select
-                    value={stato}
-                    onChange={(e) => setStato(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white"
-                  >
-                    <option value="pending">
-                      {mode === 'comanda' ? '⏳ In attesa / Da preparare' : mode === 'carrello' ? '⏳ In attesa / Da confermare' : '⏳ In attesa (Pending)'}
-                    </option>
-                    <option value="confermata">
-                      {mode === 'comanda' ? '🍳 In preparazione' : mode === 'carrello' ? '📦 Confermato / In allestimento' : '✅ Confermata'}
-                    </option>
-                    <option value="completata">
-                      {mode === 'comanda' ? '🎉 Servita / Completata' : mode === 'carrello' ? '🎉 Consegnato / Ritirato' : '🎉 Completata'}
-                    </option>
-                    <option value="cancellata">❌ Cancellata</option>
-                  </select>
-                </div>
               </div>
 
-              {/* Titolo / Riferimento opzionale */}
+              {/* STATO COMANDA */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {mode === 'comanda' ? 'Tavolo / Riferimento Comanda' : mode === 'carrello' ? 'Riferimento Ordine / Ritiro' : 'Titolo Appuntamento / Note Rapide'}
+                  Stato Avanzamento Cucina
                 </label>
-                <input
-                  type="text"
-                  placeholder={
-                    mode === 'comanda'
-                      ? 'Es. Tavolo 4, Asporto ore 13:00, Sala Interna'
-                      : mode === 'carrello'
-                      ? 'Es. Ordine Cassa 1, Ritiro al Banco, Spedizione'
-                      : 'Es. Taglio + Barba, Consulenza'
-                  }
-                  value={titolo}
-                  onChange={(e) => setTitolo(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white"
-                />
+                <select
+                  value={stato}
+                  onChange={(e) => setStato(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-900 dark:text-white"
+                >
+                  <option value="pending">⏳ In attesa (Da prendere in carico)</option>
+                  <option value="confermata">🍳 In preparazione (In cucina)</option>
+                  <option value="completata">🎉 Servita / Chiusa al tavolo</option>
+                  <option value="cancellata">❌ Annullata</option>
+                </select>
               </div>
 
-              {/* 3. DATA, ORARIO & DURATA */}
+              {/* 3. DATA, ORARIO & TEMPI DI PREPARAZIONE */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                    Pianificazione Data & Orario
+                    <Clock className="w-3.5 h-3.5 text-rose-500" />
+                    Orario Comanda & Tempi Cucina
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleCheckAvailableSlots}
-                    disabled={slotsLoading || !dateStr}
-                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
-                  >
-                    {slotsLoading ? 'Calcolo slot...' : 'Verifica Slot'}
-                  </button>
+                  <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                    Prep. stimata: {totalMinutes} min
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Data
+                      Data Comanda
                     </label>
                     <input
                       type="date"
@@ -1127,7 +943,7 @@ export default function PrenotazioneDrawer({
 
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
-                      Ora Inizio
+                      Ora Ordinazione
                     </label>
                     <input
                       type="time"
@@ -1139,142 +955,40 @@ export default function PrenotazioneDrawer({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
-                        Ora Fine
-                      </label>
-                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
-                        {totalMinutes} min
-                      </span>
-                    </div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                      Uscita Prevista
+                    </label>
                     <input
                       type="time"
-                      required
+                      readOnly
                       value={calculatedEndTime}
-                      onChange={(e) => handleEndTimeChange(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400"
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-700 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 cursor-default"
                     />
                   </div>
                 </div>
-
-                {/* Regolazione rapida durata */}
-                <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => applyTotalDuration(Math.max(5, totalMinutes - 15))}
-                      className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300 cursor-pointer shadow-2xs"
-                    >
-                      -15m
-                    </button>
-                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 min-w-[45px] text-center">
-                      {totalMinutes} min
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => applyTotalDuration(totalMinutes + 15)}
-                      className="px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-300 cursor-pointer shadow-2xs"
-                    >
-                      +15m
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {[15, 30, 45, 60, 90].map((mins) => (
-                      <button
-                        key={mins}
-                        type="button"
-                        onClick={() => applyTotalDuration(mins)}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                          totalMinutes === mins
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600'
-                        }`}
-                      >
-                        {mins}m
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {slotMessage && (
-                  <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    {slotMessage}
-                  </div>
-                )}
-
-                {/* Slot suggeriti */}
-                {availableSlots.length > 0 && (
-                  <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                      Tocca per selezionare orario:
-                    </span>
-                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                      {availableSlots.map((slot) => {
-                        const isSelected = timeStr === slot;
-                        return (
-                          <button
-                            key={slot}
-                            type="button"
-                            onClick={() => setTimeStr(slot)}
-                            className={`text-[11px] px-2 py-0.5 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white border-indigo-600 font-bold'
-                                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                            }`}
-                          >
-                            {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
-                            <span>{slot}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* 4. ELEMENTI INCLUSI (SERVIZI, COMMANDE E CARRELLI) */}
+              {/* 4. PIATTI E PRODOTTI INCLUSI NELLA COMANDA */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                    <Wrench className="w-3.5 h-3.5 text-indigo-500" />
-                    Elementi Selezionati ({items.length})
+                    <ChefHat className="w-3.5 h-3.5 text-rose-500" />
+                    Portate Comanda ({items.reduce((acc, it) => acc + (it.quantita || 1), 0)})
                   </h3>
                   <div className="flex items-center gap-3 text-xs font-bold">
-                    {totalMinutes > 0 && (
-                      <span className="text-slate-500 dark:text-slate-400">
-                        Durata: {totalMinutes}m
-                      </span>
-                    )}
-                    <span className="text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                      Totale: € {totalPrice.toFixed(2)}
+                    <span className="text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-2.5 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                      Totale Comanda: € {totalPrice.toFixed(2)}
                     </span>
                   </div>
                 </div>
 
-                {/* Selettore Modulo Cataloghi (Servizi, Piatti/Comande, Prodotti/Carrello) */}
+                {/* Selettore Modulo Cataloghi */}
                 <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => {
-                      setCatalogTab('servizio');
-                      setServiceSearchQuery('');
-                    }}
-                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      catalogTab === 'servizio'
-                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    <Wrench className="w-3 h-3" />
-                    <span>Servizi ({availableServizi.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
                       setCatalogTab('piatto');
-                      setServiceSearchQuery('');
+                      setItemSearchQuery('');
                     }}
                     className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       catalogTab === 'piatto'
@@ -1283,14 +997,14 @@ export default function PrenotazioneDrawer({
                     }`}
                   >
                     <UtensilsCrossed className="w-3 h-3" />
-                    <span>Comande Piatti ({piatti?.length || 0})</span>
+                    <span>Piatti Menu ({piatti?.length || 0})</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
                       setCatalogTab('prodotto');
-                      setServiceSearchQuery('');
+                      setItemSearchQuery('');
                     }}
                     className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       catalogTab === 'prodotto'
@@ -1299,7 +1013,23 @@ export default function PrenotazioneDrawer({
                     }`}
                   >
                     <ShoppingBag className="w-3 h-3" />
-                    <span>Carrello Prodotti ({prodotti?.length || 0})</span>
+                    <span>Bevande & Prodotti ({prodotti?.length || 0})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatalogTab('servizio');
+                      setItemSearchQuery('');
+                    }}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      catalogTab === 'servizio'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Wrench className="w-3 h-3" />
+                    <span>Servizi ({servizi?.length || 0})</span>
                   </button>
                 </div>
 
@@ -1310,20 +1040,20 @@ export default function PrenotazioneDrawer({
                     <input
                       type="text"
                       placeholder={
-                        catalogTab === 'servizio'
-                          ? 'Cerca servizio da aggiungere...'
-                          : catalogTab === 'piatto'
-                          ? 'Cerca piatto per la comanda...'
-                          : 'Cerca prodotto per il carrello...'
+                        catalogTab === 'piatto'
+                          ? 'Cerca piatto nel menu da aggiungere...'
+                          : catalogTab === 'prodotto'
+                          ? 'Cerca bevanda o articolo...'
+                          : 'Cerca servizio...'
                       }
-                      value={serviceSearchQuery}
-                      onChange={(e) => setServiceSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-7 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20"
+                      value={itemSearchQuery}
+                      onChange={(e) => setItemSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-rose-500/20"
                     />
-                    {serviceSearchQuery && (
+                    {itemSearchQuery && (
                       <button
                         type="button"
-                        onClick={() => setServiceSearchQuery('')}
+                        onClick={() => setItemSearchQuery('')}
                         className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
                       >
                         <X className="w-3 h-3" />
@@ -1331,47 +1061,11 @@ export default function PrenotazioneDrawer({
                     )}
                   </div>
 
-                  {/* Risultati Tab 1: Servizi */}
-                  {catalogTab === 'servizio' && (
-                    filteredServizi.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
-                        {filteredServizi.slice(0, 10).map((servizio) => (
-                          <button
-                            key={servizio.id}
-                            type="button"
-                            onClick={() => handleAddService(servizio)}
-                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl text-left transition-all group flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate block group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                {servizio.titolo}
-                              </span>
-                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                <span>{servizio.tempo_minuti} min</span>
-                                <span>•</span>
-                                <span className="font-semibold text-slate-600 dark:text-slate-300">
-                                  € {Number(servizio.prezzo).toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
-                              <Plus className="w-3.5 h-3.5" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                        Nessun servizio trovato con &quot;{serviceSearchQuery}&quot;
-                      </div>
-                    )
-                  )}
-
-                  {/* Risultati Tab 2: Comande Piatti */}
+                  {/* Tab Piatti */}
                   {catalogTab === 'piatto' && (
                     filteredPiatti.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
-                        {filteredPiatti.slice(0, 10).map((piatto) => (
+                        {filteredPiatti.slice(0, 12).map((piatto) => (
                           <button
                             key={piatto.id}
                             type="button"
@@ -1398,16 +1092,18 @@ export default function PrenotazioneDrawer({
                       </div>
                     ) : (
                       <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                        Nessun piatto trovato con &quot;{serviceSearchQuery}&quot;
+                        {piatti.length === 0
+                          ? 'Nessun piatto configurato nel Menu di questo Hub.'
+                          : `Nessun piatto trovato con "${itemSearchQuery}"`}
                       </div>
                     )
                   )}
 
-                  {/* Risultati Tab 3: Carrelli Prodotti */}
+                  {/* Tab Prodotti */}
                   {catalogTab === 'prodotto' && (
                     filteredProdotti.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
-                        {filteredProdotti.slice(0, 10).map((prod) => (
+                        {filteredProdotti.slice(0, 12).map((prod) => (
                           <button
                             key={prod.id}
                             type="button"
@@ -1419,7 +1115,7 @@ export default function PrenotazioneDrawer({
                                 {prod.titolo}
                               </span>
                               <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                <span>{prod.brand || prod.categoria || 'Articolo'}</span>
+                                <span>{prod.categoria || 'Articolo'}</span>
                                 <span>•</span>
                                 <span className="font-semibold text-slate-600 dark:text-slate-300">
                                   € {Number(prod.prezzo_nuovo || prod.prezzo_listino || 0).toFixed(2)}
@@ -1434,16 +1130,50 @@ export default function PrenotazioneDrawer({
                       </div>
                     ) : (
                       <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                        Nessun prodotto trovato con &quot;{serviceSearchQuery}&quot;
+                        {prodotti.length === 0
+                          ? 'Nessun prodotto a catalogo.'
+                          : `Nessun prodotto trovato con "${itemSearchQuery}"`}
+                      </div>
+                    )
+                  )}
+
+                  {/* Tab Servizi */}
+                  {catalogTab === 'servizio' && (
+                    filteredServizi.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-0.5">
+                        {filteredServizi.slice(0, 12).map((serv) => (
+                          <button
+                            key={serv.id}
+                            type="button"
+                            onClick={() => handleAddService(serv)}
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl text-left transition-all group flex items-center justify-between gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate block group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                {serv.titolo}
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                <span>€ {Number(serv.prezzo || 0).toFixed(2)}</span>
+                              </div>
+                            </div>
+                            <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                              <Plus className="w-3.5 h-3.5" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-400 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                        Nessun servizio disponibile.
                       </div>
                     )
                   )}
                 </div>
 
-                {/* Lista degli Elementi Aggiunti (Servizi, Comande Piatti, Carrello Prodotti) */}
+                {/* Lista delle Portate Aggiunte */}
                 {items.length === 0 ? (
-                  <div className="p-4 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-400">
-                    Nessun elemento aggiunto. Scegli servizi, comande piatti o prodotti dal catalogo sopra.
+                  <div className="p-4 text-center rounded-2xl border border-dashed border-rose-200 dark:border-rose-900/40 text-xs text-slate-400">
+                    Nessuna portata aggiunta. Scegli piatti dal menu sopra per completare la comanda.
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -1464,7 +1194,7 @@ export default function PrenotazioneDrawer({
                                     : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/50'
                                 }`}
                               >
-                                {it.tipo === 'piatto' ? 'Comanda' : it.tipo === 'prodotto' ? 'Carrello' : 'Servizio'}
+                                {it.tipo === 'piatto' ? 'Piatto' : it.tipo === 'prodotto' ? 'Bevanda' : 'Servizio'}
                               </span>
                               <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
                                 {it.titolo}
@@ -1475,9 +1205,9 @@ export default function PrenotazioneDrawer({
                             </span>
                           </div>
 
-                          {/* Controlli Quantità / Tempi di Preparazione/Erogazione & Rimuovi */}
+                          {/* Controlli Quantità & Prep Time */}
                           <div className="flex items-center gap-2 shrink-0">
-                            {/* Stepper Quantità universale (Servizi, Piatti e Prodotti) */}
+                            {/* Stepper Quantità */}
                             <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-0.5">
                               <button
                                 type="button"
@@ -1500,15 +1230,12 @@ export default function PrenotazioneDrawer({
                               </button>
                             </div>
 
-                            {/* Controllo Tempi di Preparazione / Erogazione */}
-                            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-0.5" title={it.tipo === 'piatto' ? 'Tempo preparazione cucina' : it.tipo === 'servizio' ? 'Durata erogazione servizio' : 'Tempo allestimento articolo'}>
-                              {it.tipo === 'piatto' ? (
-                                <UtensilsCrossed className="w-3 h-3 text-rose-500 shrink-0" />
-                              ) : it.tipo === 'prodotto' ? (
-                                <ShoppingBag className="w-3 h-3 text-amber-500 shrink-0" />
-                              ) : (
-                                <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
-                              )}
+                            {/* Controllo Tempo Preparazione Cucina */}
+                            <div
+                              className="flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-0.5"
+                              title="Tempo di preparazione stimato in cucina"
+                            >
+                              <UtensilsCrossed className="w-3 h-3 text-rose-500 shrink-0" />
                               <input
                                 type="number"
                                 min="0"
@@ -1538,20 +1265,14 @@ export default function PrenotazioneDrawer({
                           </div>
                         </div>
 
-                        {/* Note specifiche per il piatto/prodotto/servizio */}
+                        {/* Note specifiche per la cucina */}
                         <div className="pt-1 border-t border-slate-100 dark:border-slate-800/60">
                           <input
                             type="text"
-                            placeholder={
-                              it.tipo === 'piatto'
-                                ? 'Note cucina (es. senza cipolla, ben cotto, intolleranze)...'
-                                : it.tipo === 'prodotto'
-                                ? 'Note prodotto (es. taglia, colore, confezione regalo)...'
-                                : 'Note specifiche...'
-                            }
+                            placeholder="Note cucina (es. ben cotto, senza cipolla, no formaggio, intolleranze)..."
                             value={it.note || ''}
                             onChange={(e) => handleUpdateItemNote(idx, e.target.value)}
-                            className="w-full text-[11px] px-2.5 py-1 bg-slate-50/70 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800 rounded-lg text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                            className="w-full text-[11px] px-2.5 py-1 bg-slate-50/70 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800 rounded-lg text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:border-rose-500"
                           />
                         </div>
                       </div>
@@ -1560,15 +1281,14 @@ export default function PrenotazioneDrawer({
                 )}
               </div>
 
-
-              {/* 5. NOTE AGGIUNTIVE */}
+              {/* 5. NOTE AGGIUNTIVE COMANDA */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Note Aggiuntive per lo Staff
+                  Note Generali per la Cucina o lo Staff
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Es. Richiesta specifica del cliente, preferenze..."
+                  placeholder="Es. Servire prima i primi piatti, comanda urgente, tavolo con bambini..."
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white resize-none"
@@ -1579,7 +1299,7 @@ export default function PrenotazioneDrawer({
           </form>
         </div>
 
-        {/* Footer Drawer con Azioni Rapide */}
+        {/* Footer Drawer */}
         <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 shrink-0">
           <div>
             {initialData && isAdmin ? (
@@ -1590,7 +1310,7 @@ export default function PrenotazioneDrawer({
                 className="px-3 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Elimina</span>
+                <span className="hidden sm:inline">Elimina Comanda</span>
               </button>
             ) : null}
           </div>
@@ -1607,29 +1327,18 @@ export default function PrenotazioneDrawer({
             {isAdmin && (
               <button
                 type="submit"
-                form="prenotazione-form"
+                form="comanda-form"
                 disabled={isPending || items.length === 0}
-                className={`px-4 py-2 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
-                  mode === 'comanda'
-                    ? 'bg-rose-600 hover:bg-rose-700'
-                    : mode === 'carrello'
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                {isPending
-                  ? 'Salvataggio...'
-                  : initialData
-                  ? mode === 'comanda'
-                    ? 'Aggiorna Comanda'
-                    : mode === 'carrello'
-                    ? 'Aggiorna Ordine'
-                    : 'Aggiorna Prenotazione'
-                  : mode === 'comanda'
-                  ? 'Salva Comanda'
-                  : mode === 'carrello'
-                  ? 'Salva Ordine'
-                  : 'Salva Prenotazione'}
+                {isPending ? (
+                  'Salvataggio...'
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{initialData ? 'Aggiorna Comanda' : 'Salva Comanda'}</span>
+                  </>
+                )}
               </button>
             )}
           </div>

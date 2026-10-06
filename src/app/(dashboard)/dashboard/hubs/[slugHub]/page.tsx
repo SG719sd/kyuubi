@@ -56,7 +56,40 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
 
   const managementModules = [
     {
-      title: "Servizi",
+      title: "Prenotazioni per i Servizi",
+      description:
+        "Consulta l'agenda appuntamenti, orari operatori e disponibilità servizi.",
+      href: `/dashboard/hubs/${hub.slug}/prenotazioni`,
+      icon: CalendarCheck,
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-500/10",
+      borderHover: "hover:border-emerald-500/50",
+      disabled: false,
+    },
+    {
+      title: "Comande per i Piatti",
+      description:
+        "Gestisci comande sala e asporto, pre-prenotazione piatti e stato cucina.",
+      href: `/dashboard/hubs/${hub.slug}/comande`,
+      icon: UtensilsCrossed,
+      color: "text-rose-600 dark:text-rose-400",
+      bg: "bg-rose-500/10",
+      borderHover: "hover:border-rose-500/50",
+      disabled: false,
+    },
+    {
+      title: "Carrelli per i Prodotti",
+      description:
+        "Ordini d'acquisto prodotti, pre-prenotazione articoli e ritiro al banco.",
+      href: `/dashboard/hubs/${hub.slug}/carrelli`,
+      icon: ShoppingBag,
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-500/10",
+      borderHover: "hover:border-amber-500/50",
+      disabled: false,
+    },
+    {
+      title: "Catalogo Servizi",
       description:
         "Gestisci i servizi offerti ai clienti, listini prezzi e durate.",
       href: `/dashboard/hubs/${hub.slug}/servizi`,
@@ -64,29 +97,7 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
       color: "text-indigo-600 dark:text-indigo-400",
       bg: "bg-indigo-500/10",
       borderHover: "hover:border-indigo-500/50",
-      disabled: hub.has_services === false,
-    },
-    {
-      title: "Prenotazioni",
-      description:
-        "Consulta il calendario appuntamenti e gestisci le disponibilità.",
-      href: `/dashboard/hubs/${hub.slug}/prenotazioni`,
-      icon: CalendarCheck,
-      color: "text-emerald-600 dark:text-emerald-400",
-      bg: "bg-emerald-500/10",
-      borderHover: "hover:border-emerald-500/50",
-      disabled: hub.has_booking === false,
-    },
-    {
-      title: "Prodotti",
-      description:
-        "Catalogo prodotti in vendita, giacenze di magazzino e categorie.",
-      href: `/dashboard/hubs/${hub.slug}/prodotti`,
-      icon: ShoppingBag,
-      color: "text-amber-600 dark:text-amber-400",
-      bg: "bg-amber-500/10",
-      borderHover: "hover:border-amber-500/50",
-      disabled: hub.has_products === false,
+      disabled: false,
     },
     {
       title: "Menu & Piatti",
@@ -97,7 +108,18 @@ export default async function HubLandingPage({ params }: HubLandingPageProps) {
       color: "text-rose-600 dark:text-rose-400",
       bg: "bg-rose-500/10",
       borderHover: "hover:border-rose-500/50",
-      disabled: hub.has_dishes === false,
+      disabled: false,
+    },
+    {
+      title: "Catalogo Prodotti",
+      description:
+        "Catalogo prodotti in vendita, giacenze di magazzino e categorie.",
+      href: `/dashboard/hubs/${hub.slug}/prodotti`,
+      icon: ShoppingBag,
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-500/10",
+      borderHover: "hover:border-amber-500/50",
+      disabled: false,
     },
     {
       title: "Rubrica Clienti",

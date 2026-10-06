@@ -7,13 +7,13 @@ import { RubricaService } from '@/server/services/rubrica.service';
 import { ServiziService } from '@/server/services/servizi.service';
 import { ProdottiService } from '@/server/services/prodotti.service';
 import { PiattiService } from '@/server/services/piatti.service';
-import PrenotazioniView from '@/components/views/dashboard/prenotazioni/prenotazioni-view';
+import ComandeView from '@/components/views/dashboard/comande/comande-view';
 import BackButton from '@/components/layout/back-button';
 import HubPageWrapper from '@/components/layout/wrapper/HubPageWrapper';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PrenotazioniPage({
+export default async function ComandePage({
   params,
 }: {
   params: Promise<{ slugHub: string }>;
@@ -50,20 +50,20 @@ export default async function PrenotazioniPage({
           <BackButton />
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span>Prenotazioni per i Servizi</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200/60 dark:border-indigo-800/60 hidden sm:inline-block">
-                Servizi & Staff
+              <span>Comande per i Piatti</span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 font-bold border border-rose-200/60 dark:border-rose-800/60 hidden sm:inline-block">
+                Cucina & Sala
               </span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Gestione appuntamenti, orari e disponibilità operatori
+              Gestione ordini di sala e asporto, pre-prenotazione piatti e stato cucina
             </p>
           </div>
         </div>
       </div>
 
-      {/* Vista Gestionale (Client Component) */}
-      <PrenotazioniView
+      {/* Vista Gestionale Comande (Client Component) */}
+      <ComandeView
         prenotazioni={prenotazioni}
         professionisti={professionisti}
         professionistiServizi={professionistiServizi}
